@@ -563,6 +563,7 @@ def build_historical_analysis(
         "quarterly": [],
         "commentary": {"paragraphs": [], "strengths": [], "risks": [], "watch": []},
         "data_quality": {},
+        "market_source_available": False,
     }
 
     try:
@@ -576,6 +577,7 @@ def build_historical_analysis(
             try:
                 info_obj = stock.info
                 info = info_obj.todict() if hasattr(info_obj, "todict") else dict(info_obj)
+                result["market_source_available"] = True
             except Exception as exc:
                 result["metadata_warning"] = str(exc)
 
