@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import argparse, html, json, math, re, statistics
+import argparse, html, json, math, re, statistics, time
 from functools import lru_cache
 from datetime import datetime
 from pathlib import Path
@@ -94,12 +94,25 @@ def status(s):
     if s is None:return "N/A"
     return "Çok güçlü" if s>=75 else "Güçlü" if s>=60 else "Dengeli" if s>=45 else "Zayıf" if s>=30 else "Çok zayıf"
 
+def _retry_call(fn, attempts=2, base_delay=0.6):
+    last=None
+    for attempt in range(max(1,int(attempts))):
+        try:
+            return fn()
+        except Exception as exc:
+            last=exc
+            if attempt+1 < attempts:
+                time.sleep(base_delay*(attempt+1))
+    if last is not None:
+        raise last
+
 OPERATING_XHOLD_OVERRIDES={"TAVHL","SISE"}
 
 @lru_cache(maxsize=16)
 def _official_members(code):
     try:
-        return frozenset(str(x).upper() for x in bp.Index(code).component_symbols)
+        members=_retry_call(lambda: bp.Index(code).component_symbols,attempts=2,base_delay=0.5)
+        return frozenset(str(x).upper() for x in members)
     except Exception:
         return frozenset()
 
@@ -234,7 +247,12 @@ def _isyatirim_cross_section_records():
     ]
     for crit,lo,hi,outkey,candidates,mult in specs:
         try:
-            d=bp.Screener().add_filter(crit,min=lo,max=hi,required=False).run()
+            d=_retry_call(
+                lambda crit=crit,lo=lo,hi=hi: bp.Screener().add_filter(
+                    crit,min=lo,max=hi,required=False
+                ).run(),
+                attempts=2,base_delay=0.5,
+            )
         except Exception:
             continue
         if d is None or d.empty or "symbol" not in d.columns:
@@ -265,7 +283,13 @@ def enrich_isyatirim_cross_section(df):
 
 
 def universe(include_isyatirim=False):
-    _,df=(Query().select(*FIELDS).set_markets("turkey").where(col("exchange")=="BIST",col("type")=="stock").order_by("market_cap_basic",ascending=False,nulls_first=False).limit(1000).get_scanner_data())
+    result=_retry_call(
+        lambda: Query().select(*FIELDS).set_markets("turkey").where(
+            col("exchange")=="BIST",col("type")=="stock"
+        ).order_by("market_cap_basic",ascending=False,nulls_first=False).limit(1000).get_scanner_data(),
+        attempts=3,base_delay=0.8,
+    )
+    _,df=result
     if df is None or df.empty: raise RuntimeError("BIST evreni alınamadı")
     df=df.copy()
     # TradingView may tag exchange-traded certificates as type=stock. They are
