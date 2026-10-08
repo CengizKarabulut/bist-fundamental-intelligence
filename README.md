@@ -104,6 +104,31 @@ GYO'lar sanayi şirketleriyle aynı değerleme motoruna zorlanmaz. Özellikle:
 
 Regresyon testleri EKGYO üzerinde bu kuralları semantik olarak doğrular; yalnızca script'in hata vermeden çalışması yeterli kabul edilmez.
 
+
+## Tüm BIST otomatik kalite/audit sistemi
+
+Repo artık yalnız ASELS/AKBNK/EKGYO spot regresyonlarıyla yetinmez. \`Full BIST Audit\` workflow'u güncel BIST şirket evrenini şirket bazında tekilleştirir ve hisseleri 8 paralel shard'a bölerek **her sembolü tek tek** kontrol eder.
+
+Her şirket için denetlenen başlıca kurallar:
+
+- profil sınıflandırması ve profil-bazlı skor dışı metrikler,
+- Banka/GYO/Holding/Sigorta/Yatırım Ortaklığı özel kuralları,
+- bilanço/gelir tablosu çekilebilirliği ve çekirdek satır kapsaması,
+- negatif özkaynakta anlamsız ROE/PD-DD/Borç-Özsermaye skorlarının engellenmesi,
+- İş Yatırım ve TradingView oranları arasındaki büyük veri uyuşmazlıkları,
+- aşırı/şüpheli finansal oranlar,
+- sektör/endüstri/BIST100/tüm BIST karşılaştırma evrenlerinin yeterliliği,
+- GYO için XGMYO, banka için XBANK gibi profil-endeks eşleşmeleri,
+- skor ve yüzdeliklerin 0–100 matematiksel sınırları.
+
+Workflow sonunda \`full-bist-audit\` artifact'ı üretilir:
+
+- \`full_bist_audit.csv\` — şirket bazında tüm bulgular,
+- \`full_bist_audit_summary.json\` — makine okunur özet,
+- \`full_bist_audit.md\` — insan okunur hata/uyarı özeti.
+
+Audit'te bir şirketin veri sağlayıcısında eksik veri bulunması tek başına "motor hatası" sayılmaz. Sistem **motor hatası**, **kritik muhasebe/profil hatası**, **kaynak uyuşmazlığı** ve **veri eksikliği/uyarı** ayrımını korur.
+
 ## Uyarı
 
 Bu proje araştırma ve veri analizi amaçlıdır. Üretilen raporlar yatırım tavsiyesi değildir.
