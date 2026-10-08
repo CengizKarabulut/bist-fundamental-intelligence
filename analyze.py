@@ -814,7 +814,7 @@ def html_report(t,p,a,s,g,xset,perf,comments,gen,history=None,validation=None,se
             return f"{e(fmt(q['median'],x['kind']))}<small>n={q['n']} · {e(scoretxt(q['pct']))}</small>"
         rows.append(
             f"<tr><td>{e(x['label'])}</td><td>{e(fmt(x['v'],x['kind']))}</td>"
-            f"<td>{e(status(x['abs']) if x['app'] else 'Uygulanmaz')}</td>"
+            f"<td>{e('Uygulanmaz' if not x['app'] else 'Skor dışı' if not x.get('scoreable',True) else status(x['abs']))}</td>"
             f"<td>{grp('industry')}</td><td>{grp('sector')}</td><td>{grp('xu100')}</td><td>{grp('bist')}</td></tr>"
         )
         blocks.append(f"<section><h3>{e(x['label'])} — {e(fmt(x['v'],x['kind']))}</h3><p>{e(comments[k])}</p></section>")
@@ -909,12 +909,12 @@ def main():
     if h.empty:raise SystemExit(f"{sym} bulunamadı")
     t=h.iloc[0].copy(); t["symbol"]=sym; p=profile(t)
     print("[2/11] BIST100 üyeleri alınıyor..."); xs=xu100(u)
-    print("[3/11] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs); an=analyze(t,p,g); sc=scores(an)
-    print("[4/11] Her faktör yorumlanıyor..."); cm={k:factor_comment(v,p) for k,v in an.items()}
-    print("[5/11] XU100 ve sektör endeksi performansı..."); ip=index_perf(); secidx=sector_index_code(t,p); sip=bist_index_perf(secidx)
-    print("[6/11] BorsaPy/KAP ve 12 çeyreklik mali tablolar analiz ediliyor..."); REPORTS.mkdir(exist_ok=True); hist=build_historical_analysis(sym,p,REPORTS)
+    print("[3/11] BorsaPy/KAP ve 12 çeyreklik mali tablolar analiz ediliyor..."); REPORTS.mkdir(exist_ok=True); hist=build_historical_analysis(sym,p,REPORTS)
+    print("[4/11] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs); an=analyze(t,p,g); an=apply_profile_primary_source(an,p,hist,g); sc=scores(an)
+    print("[5/11] Her faktör yorumlanıyor..."); cm={k:factor_comment(v,p) for k,v in an.items()}
+    print("[6/11] XU100 ve sektör endeksi performansı..."); ip=index_perf(); secidx=sector_index_code(t,p); sip=bist_index_perf(secidx)
     print("[7/11] Tarihsel büyüme, marj, nakit ve bilanço trendleri birleştiriliyor...")
-    print("[8/11] Kaynaklar arası TTM veri doğrulaması yapılıyor..."); valid=source_validation(an,hist)
+    print("[8/11] Kaynaklar arası veri doğrulaması yapılıyor..."); valid=source_validation(t,an,hist)
     print("[9/11] Sektör endeksi relatif fiyat görünümü birleştiriliyor...")
     print("[10/11] Profesyonel rapor hazırlanıyor..."); gen=datetime.now().isoformat(timespec="seconds")
     hp=REPORTS/f"{sym}_report.html"; jp=REPORTS/f"{sym}_report.json"; cp=REPORTS/f"{sym}_universe_snapshot.csv"
