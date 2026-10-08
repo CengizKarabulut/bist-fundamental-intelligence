@@ -11,7 +11,7 @@ on:
       - ".github/workflows/full-audit.yml"
 
 concurrency:
-  group: full-bist-deep-audit
+  group: full-bist-deep-audit-v2
   cancel-in-progress: true
 
 jobs:
