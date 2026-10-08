@@ -437,7 +437,17 @@ def build_historical_analysis(symbol: str, profile: str, report_dir: Path | None
 
     try:
         stock = bp.Ticker(symbol)
-        info = stock.info.todict() if hasattr(stock.info, "todict") else dict(stock.info)
+
+        # Quote/KAP metadata is useful but must never block financial-statement
+        # analysis. TradingView quote endpoints can be temporarily unavailable
+        # while İş Yatırım financial statements are still accessible.
+        info = {}
+        try:
+            info_obj = stock.info
+            info = info_obj.todict() if hasattr(info_obj, "todict") else dict(info_obj)
+        except Exception as exc:
+            result["metadata_warning"] = str(exc)
+
         result["kap"] = {
             "sector": info.get("sector"),
             "industry": info.get("industry"),
