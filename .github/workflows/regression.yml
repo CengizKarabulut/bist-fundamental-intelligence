@@ -46,6 +46,12 @@ jobs:
       - name: EKGYO GYO/NAD testi
         run: python analyze.py EKGYO
 
+      - name: AGESA sigorta/UFRS testi
+        run: python analyze.py AGESA
+
+      - name: ISFIN banka dışı finans/UFRS testi
+        run: python analyze.py ISFIN
+
       - name: Semantik rapor kontrolleri
         run: python regression_checks.py
 
