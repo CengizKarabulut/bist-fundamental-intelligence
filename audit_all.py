@@ -1,0 +1,258 @@
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import traceback
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
+
+import analyze as eng
+from history_engine import build_historical_analysis
+
+OUT = Path("audit_results")
+
+PROFILE_RULES = {
+    "Banka": {"must_exclude": {"ev","pfcf","roic","gross","opm","ebitdam","rev_g","curr","quick","de","nde","fcfm","pio"}},
+    "Sigorta": {"must_exclude": {"ev","pfcf","roic","gross","opm","ebitdam","rev_g","curr","quick","de","nde","fcfm","pio"}},
+    "Finansal": {"must_exclude": {"ev","pfcf","roic","gross","opm","ebitdam","rev_g","curr","quick","de","nde","fcfm","pio"}},
+    "GYO": {"must_nonscore": {"pe","pb","ev","pfcf","eps_g","nde","fcfm","pio"}},
+    "Holding": {"must_nonscore": {"pe","pb","ev","pfcf","rev_g","eps_g","gross","opm","ebitdam","nde","fcfm","pio"}},
+    "Yatırım Ortaklığı": {"must_nonscore": {"pe","pb","eps_g","ni_g","netm"}},
+}
+
+def sev_rank(s: str) -> int:
+    return {"OK":0,"INFO":1,"WARNING":2,"CRITICAL":3,"ERROR":4}.get(s,0)
+
+def add_issue(issues, severity, code, detail):
+    issues.append({"severity": severity, "code": code, "detail": str(detail)})
+
+def finite(v):
+    try:
+        return v is not None and math.isfinite(float(v))
+    except Exception:
+        return False
+
+def audit_symbol(row, universe_df, xu100_set, qn):
+    sym=str(row["symbol"]).upper()
+    profile=eng.profile(row)
+    issues=[]
+
+    try:
+        hist=build_historical_analysis(
+            sym, profile, report_dir=None,
+            quarterly_periods=qn, annual_periods=4,
+            load_market_info=False,
+        )
+    except Exception as exc:
+        hist={"error":f"{type(exc).__name__}: {exc}"}
+
+    try:
+        g=eng.groups(universe_df,row,xu100_set)
+        metrics=eng.analyze(row,profile,g)
+        metrics=eng.apply_profile_primary_source(metrics,profile,hist,g)
+        scores=eng.scores(metrics)
+    except Exception as exc:
+        add_issue(issues,"ERROR","ENGINE_EXCEPTION",f"{type(exc).__name__}: {exc}")
+        return {
+            "symbol":sym,"profile":profile,"status":"ERROR",
+            "issues":issues,"exception":traceback.format_exc(limit=3),
+        }
+
+    # 1) Hard engine invariants.
+    for key,x in metrics.items():
+        score=x.get("abs")
+        if score is not None and not (0 <= float(score) <= 100):
+            add_issue(issues,"ERROR","ABS_SCORE_RANGE",f"{key}={score}")
+        for gn,gv in x.get("groups",{}).items():
+            pct=gv.get("pct")
+            if pct is not None and not (0 <= float(pct) <= 100):
+                add_issue(issues,"ERROR","PERCENTILE_RANGE",f"{key}/{gn}={pct}")
+
+    for name,val in {
+        "quality":scores.get("quality"),
+        "valuation":scores.get("valuation"),
+        "composite":scores.get("composite"),
+    }.items():
+        if val is not None and not (0 <= float(val) <= 100):
+            add_issue(issues,"ERROR","COMPOSITE_RANGE",f"{name}={val}")
+
+    # 2) Profile-specific scoring invariants.
+    rules=PROFILE_RULES.get(profile,{})
+    for key in rules.get("must_exclude",set()):
+        if key in metrics and metrics[key].get("app"):
+            add_issue(issues,"ERROR","PROFILE_EXCLUSION",f"{profile}: {key} app=True")
+    for key in rules.get("must_nonscore",set()):
+        if key in metrics and metrics[key].get("scoreable"):
+            add_issue(issues,"ERROR","PROFILE_NONSCORE",f"{profile}: {key} scoreable=True")
+
+    if profile=="GYO" and scores.get("valuation") is not None:
+        add_issue(issues,"CRITICAL","GYO_VALUATION_SCORE","GYO için klasik değerleme skoru üretilmiş.")
+    if profile=="Banka" and metrics.get("fcfm",{}).get("app"):
+        add_issue(issues,"CRITICAL","BANK_FCF_ACTIVE","Banka profilinde FCF metriği aktif.")
+
+    # 3) Historical statement/data-quality checks.
+    if hist.get("error"):
+        add_issue(issues,"CRITICAL","HISTORY_ERROR",hist["error"])
+    else:
+        dq=hist.get("data_quality",{})
+        found=dq.get("core_rows_found")
+        expected=dq.get("core_rows_expected")
+        if found is not None and expected:
+            coverage=float(found)/float(expected)
+            if coverage < .50:
+                add_issue(issues,"CRITICAL","CORE_ROW_COVERAGE",f"{found}/{expected}")
+            elif coverage < .75:
+                add_issue(issues,"WARNING","CORE_ROW_COVERAGE",f"{found}/{expected}")
+
+        qperiods=dq.get("quarterly_periods")
+        if qperiods is not None and qperiods < 4:
+            add_issue(issues,"WARNING","SHORT_HISTORY",f"quarterly_periods={qperiods}")
+
+        hs=hist.get("summary",{})
+        equity=hs.get("equity")
+        if finite(equity) and float(equity) <= 0:
+            for key in ("roe","pb","de","eq_assets"):
+                if metrics.get(key,{}).get("scoreable"):
+                    add_issue(issues,"CRITICAL","NEG_EQUITY_GUARD",f"{key} negatif özkaynakta scoreable")
+
+        stmt_nd=hs.get("net_debt_statement")
+        provider_nd=hs.get("net_debt_provider")
+        if finite(stmt_nd) and finite(provider_nd) and abs(float(provider_nd)) > 1:
+            gap=abs(float(stmt_nd)-float(provider_nd))/abs(float(provider_nd))
+            if gap > .25:
+                add_issue(issues,"WARNING","NET_DEBT_SOURCE_GAP",f"{gap*100:.1f}%")
+
+    # 4) Provider cross-section conflicts / suspicious ranges.
+    for key,iy_col in {
+        "pe":"iy_pe","pb":"iy_pb","ev":"iy_ev_ebitda","roe":"iy_roe","roa":"iy_roa"
+    }.items():
+        tv=eng.fnum(row.get(eng.M[key][0]))
+        iy=eng.fnum(row.get(iy_col))
+        if tv is None or iy is None:
+            continue
+        denom=max(abs(iy),1.0)
+        rel=abs(tv-iy)/denom
+        # valuation multiples are expected to be close; profitability can diverge
+        threshold=.35 if key in {"pe","pb","ev"} else .50
+        if rel > 2.0:
+            add_issue(issues,"CRITICAL","PROVIDER_CONFLICT",f"{key}: TV={tv:.3f}, IY={iy:.3f}")
+        elif rel > threshold:
+            add_issue(issues,"WARNING","PROVIDER_CONFLICT",f"{key}: TV={tv:.3f}, IY={iy:.3f}")
+
+    suspicious={
+        "pe":(0,500),"pb":(0,100),"ev":(-100,300),
+        "roe":(-1000,1000),"roa":(-500,500),
+        "rev_g":(-500,2000),"eps_g":(-5000,5000),"ni_g":(-5000,5000),
+        "curr":(0,100),"de":(-100,100),"nde":(-100,100),
+    }
+    for key,(lo,hi) in suspicious.items():
+        v=metrics.get(key,{}).get("v")
+        if v is not None and (float(v)<lo or float(v)>hi):
+            add_issue(issues,"WARNING","EXTREME_VALUE",f"{key}={v}")
+
+    # 5) Universe/benchmark sanity.
+    if len(g.get("all",[])) < 500:
+        add_issue(issues,"CRITICAL","BIST_UNIVERSE_SMALL",f"n={len(g.get('all',[]))}")
+    if profile=="GYO" and eng.sector_index_code(row,profile)!="XGMYO":
+        add_issue(issues,"ERROR","GYO_INDEX","XGMYO eşleşmedi")
+    if profile=="Banka" and eng.sector_index_code(row,profile)!="XBANK":
+        add_issue(issues,"ERROR","BANK_INDEX","XBANK eşleşmedi")
+
+    # Missing data is not automatically an error, but flag very thin company records.
+    available=sum(1 for x in metrics.values() if x.get("v") is not None)
+    if available < 5:
+        add_issue(issues,"WARNING","THIN_METRIC_COVERAGE",f"{available}/{len(metrics)}")
+
+    max_sev=max([sev_rank(x["severity"]) for x in issues],default=0)
+    status={0:"OK",1:"INFO",2:"WARNING",3:"CRITICAL",4:"ERROR"}[max_sev]
+
+    return {
+        "symbol":sym,
+        "name":str(row.get("description") or row.get("name") or ""),
+        "profile":profile,
+        "sector":str(row.get("sector") or ""),
+        "industry":str(row.get("industry") or ""),
+        "status":status,
+        "issue_count":len(issues),
+        "critical_count":sum(x["severity"] in {"CRITICAL","ERROR"} for x in issues),
+        "warning_count":sum(x["severity"]=="WARNING" for x in issues),
+        "metric_coverage":available,
+        "history_error":hist.get("error"),
+        "core_rows_found":hist.get("data_quality",{}).get("core_rows_found"),
+        "core_rows_expected":hist.get("data_quality",{}).get("core_rows_expected"),
+        "quarterly_periods":hist.get("data_quality",{}).get("quarterly_periods"),
+        "issues":issues,
+    }
+
+def flatten_issue_codes(issues):
+    return ";".join(sorted({x["code"] for x in issues}))
+
+def main():
+    ap=argparse.ArgumentParser()
+    ap.add_argument("--shard-index",type=int,default=0)
+    ap.add_argument("--shard-count",type=int,default=1)
+    ap.add_argument("--quarterly",type=int,default=8)
+    ap.add_argument("--limit",type=int,default=0)
+    args=ap.parse_args()
+
+    OUT.mkdir(exist_ok=True)
+
+    print("[audit] BIST + İş Yatırım evreni hazırlanıyor...")
+    u=eng.universe(include_isyatirim=True)
+    u=eng.dedupe(u).sort_values("symbol").reset_index(drop=True)
+    xs=eng.xu100(u)
+
+    selected=u.iloc[args.shard_index::args.shard_count].copy()
+    if args.limit>0:
+        selected=selected.head(args.limit)
+
+    results=[]
+    for pos,(_,row) in enumerate(selected.iterrows(),1):
+        sym=str(row["symbol"]).upper()
+        print(f"[audit {args.shard_index}/{args.shard_count}] {pos}/{len(selected)} {sym}",flush=True)
+        try:
+            results.append(audit_symbol(row,u,xs,args.quarterly))
+        except Exception as exc:
+            results.append({
+                "symbol":sym,"profile":eng.profile(row),"status":"ERROR",
+                "issue_count":1,"critical_count":1,"warning_count":0,
+                "issues":[{"severity":"ERROR","code":"AUDIT_EXCEPTION","detail":f"{type(exc).__name__}: {exc}"}],
+                "exception":traceback.format_exc(limit=5),
+            })
+
+    stamp=datetime.now().isoformat(timespec="seconds")
+    payload={
+        "generated_at":stamp,
+        "shard_index":args.shard_index,
+        "shard_count":args.shard_count,
+        "universe_count":len(u),
+        "xu100_count":len(xs),
+        "symbols_checked":len(results),
+        "results":results,
+    }
+
+    base=f"audit_shard_{args.shard_index:02d}"
+    (OUT/f"{base}.json").write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding="utf-8")
+
+    rows=[]
+    for r in results:
+        rows.append({
+            "symbol":r.get("symbol"),"name":r.get("name"),"profile":r.get("profile"),
+            "sector":r.get("sector"),"industry":r.get("industry"),"status":r.get("status"),
+            "issue_count":r.get("issue_count",0),"critical_count":r.get("critical_count",0),
+            "warning_count":r.get("warning_count",0),"metric_coverage":r.get("metric_coverage"),
+            "core_rows_found":r.get("core_rows_found"),"core_rows_expected":r.get("core_rows_expected"),
+            "quarterly_periods":r.get("quarterly_periods"),
+            "issue_codes":flatten_issue_codes(r.get("issues",[])),
+            "issues":" | ".join(f"{x['severity']}:{x['code']}:{x['detail']}" for x in r.get("issues",[])),
+        })
+    pd.DataFrame(rows).to_csv(OUT/f"{base}.csv",index=False,encoding="utf-8-sig")
+
+    counts=pd.Series([r.get("status","ERROR") for r in results]).value_counts().to_dict()
+    print(f"[audit] tamamlandı: {counts}")
+
+if __name__=="__main__":
+    main()
