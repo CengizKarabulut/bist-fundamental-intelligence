@@ -123,6 +123,18 @@ def profile(r):
     if "insurance" in ind or "sigorta" in d or "hayat ve emeklilik" in d:
         return "Sigorta"
 
+    # Legal-name semantics must override a misleading provider industry.
+    # Sabancı/Koç-style investment holdings can occasionally be tagged as a bank
+    # or another finance industry by a generic vendor. Operating companies such
+    # as TAV/Petkim/Deva have "Holding" in the legal name but non-finance sectors,
+    # so they remain operating-company profiles.
+    if "holding" in d and (
+        sec=="finance"
+        or ind in {"financial conglomerates","investment managers","investment banks/brokers","major banks","regional banks"}
+        or "conglomerate" in ind
+    ):
+        return "Holding"
+
     bank_name=any(x in d for x in [
         " bank ", "bank a.", "bankasi", "bankası", "katilim bank",
         "katılım bank", "kalkinma ve yatirim bank", "kalkınma ve yatırım bank",
@@ -132,16 +144,6 @@ def profile(r):
 
     if "yatirim ortakligi" in d or "yatırım ortaklığı" in d:
         return "Yatırım Ortaklığı"
-
-    # Only use the word Holding as fallback when the data-vendor classification
-    # also points to a financial/conglomerate structure. This avoids classifying
-    # operating names such as TAV/Petkim/Deva as investment holdings.
-    if "holding" in d and (
-        sec=="finance"
-        or ind in {"financial conglomerates","investment managers","investment banks/brokers"}
-        or "conglomerate" in ind
-    ):
-        return "Holding"
 
     financial_name=any(x in d for x in [
         "menkul deger", "menkul değer", "faktoring", "finansal kiralama",
