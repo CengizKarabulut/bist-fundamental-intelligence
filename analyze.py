@@ -494,11 +494,19 @@ def sector_index_code(t,p):
 
 def overall(t,p,s,perf,history=None,validation=None,sector_code=None,sector_perf=None):
     c=s["cats"]
-    words=[
-        f"{t['symbol']} için temel kalite skoru {fmt(s['quality'])}/100, "
-        f"değerleme skoru {fmt(s['valuation'])}/100 ve bileşik temel skor "
-        f"{fmt(s['composite'])}/100 düzeyindedir."
-    ]
+    if p=="GYO":
+        words=[
+            f"{t['symbol']} için GYO-uyumlu temel kalite skoru {fmt(s['quality'])}/100 ve "
+            f"bileşik temel skor {fmt(s['composite'])}/100 düzeyindedir. "
+            "Klasik F/K, PD/DD, FD/FAVÖK ve Fiyat/FCF oranlarından otomatik GYO değerleme skoru "
+            "üretilmedi; gerçek değerleme için NAD/PD-NAD ve portföy ekspertiz verisi gereklidir."
+        ]
+    else:
+        words=[
+            f"{t['symbol']} için temel kalite skoru {fmt(s['quality'])}/100, "
+            f"değerleme skoru {fmt(s['valuation'])}/100 ve bileşik temel skor "
+            f"{fmt(s['composite'])}/100 düzeyindedir."
+        ]
 
     good=sorted(
         [(k,v) for k,v in c.items() if k!="Değerleme" and v is not None and v>=65],
@@ -641,7 +649,19 @@ def overall(t,p,s,perf,history=None,validation=None,sector_code=None,sector_perf
             +"; bu metriklerde tek kaynağa dayalı kesin yorum yerine mali tablo türetimi öncelikle kontrol edilmelidir."
         )
 
-    if p in {"GYO","Holding"}:
+    if p=="GYO":
+        hs=(history or {}).get("summary",{})
+        bed=hs.get("book_equity_discount")
+        if bed is not None:
+            words.append(
+                f"Piyasa değeri/defter özkaynağı üzerinden görülen yaklaşık %{bed:.1f} iskonto yalnızca "
+                "defter değeri iskontosudur; gerçek NAD iskontosu değildir."
+            )
+        words.append(
+            "GYO sonucunda NAD, ekspertiz değerleri, arsa/proje portföyü, satış-teslim takvimi ve finansman yapısı "
+            "klasik sanayi çarpanlarının önünde tutulmalıdır."
+        )
+    elif p=="Holding":
         words.append(
             "PD/DD gerçek NAD iskontosu olarak kabul edilmez; güncel NAD verisi ayrıca sağlanmadıkça "
             "defter değeri ile net aktif değer birbirine eşitlenmez."
