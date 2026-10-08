@@ -56,20 +56,27 @@ def main():
     akb = load("AKBNK")
     ekg = load("EKGYO")
     ages = load("AGESA")
+    glbmd = load("GLBMD")
     isfin = load("ISFIN")
 
     assert ase["profile"] == "Savunma/Teknoloji", ase["profile"]
     assert akb["profile"] == "Banka", akb["profile"]
     assert ekg["profile"] == "GYO", ekg["profile"]
     assert ages["profile"] == "Sigorta", ages["profile"]
+    assert glbmd["profile"] == "Finansal", glbmd["profile"]
     assert isfin["profile"] == "Finansal", isfin["profile"]
 
-    # Financial institutions should prefer UFRS and must not fail simply because
-    # XI_29 industrial statements are unavailable.
-    for r in (ages,isfin):
+    # Supported financial institutions should prefer UFRS.
+    for r in (ages,glbmd):
         hist=r["historical_analysis"]
         assert not hist.get("error"), hist.get("error")
         assert hist.get("financial_group_used") == "UFRS", hist.get("financial_group_used")
+
+    # A provider can legitimately have no historical statements for a listed
+    # symbol. The report must degrade gracefully instead of crashing.
+    ih=isfin["historical_analysis"]
+    assert ih.get("error"), "ISFIN is expected to exercise the no-history fallback"
+    assert isfin["scores"] is not None
 
     # GYO: classic industrial valuation multiples must not create a valuation score.
     assert ekg["scores"]["valuation"] is None, ekg["scores"]["valuation"]
@@ -104,7 +111,7 @@ def main():
     for k in ("nde", "fcfm", "ev"):
         assert akb["metrics"][k]["app"] is False, (k, akb["metrics"][k])
 
-    print("Semantic regression checks passed: ASELS + AKBNK + EKGYO + AGESA + ISFIN")
+    print("Semantic regression checks passed: ASELS + AKBNK + EKGYO + AGESA + GLBMD + ISFIN")
 
 
 if __name__ == "__main__":
