@@ -255,9 +255,15 @@ def audit_one(
         "HISTORY_ERROR", "CORE_ROWS_ZERO", "PROFILE_", "SCORING_PIPELINE_ERROR",
         "GYO_VALUATION", "GYO_SCOREABLE", "BANK_INDUSTRIAL", "NET_DEBT_RECONCILIATION_FAIL",
     )
+    hard_index_mismatch={
+        "INDEX_XBANK_PROFILE_MISMATCH","INDEX_XSGRT_PROFILE_MISMATCH",
+        "INDEX_XGMYO_PROFILE_MISMATCH","INDEX_XYORT_PROFILE_MISMATCH",
+    }
     critical = [
         x for x in issue_codes
-        if x.startswith(critical_prefixes) or x in {"SOURCE_CRITICAL_DIFF", "LOW_DATA_CONFIDENCE"}
+        if x.startswith(critical_prefixes)
+        or x in {"SOURCE_CRITICAL_DIFF", "LOW_DATA_CONFIDENCE"}
+        or x in hard_index_mismatch
     ]
     warnings = [x for x in issue_codes if x not in critical]
 
