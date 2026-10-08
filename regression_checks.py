@@ -114,6 +114,25 @@ def main():
     gl_sp=glbmd["historical_analysis"].get("special_profile_analysis",{})
     assert gl_sp.get("status")=="FINANCIAL_ENGINE", gl_sp
 
+    # Statement-derived target metrics must override generic provider TTM
+    # values when İş Yatırım financial statements can reconstruct them.
+    assert ekg["metrics"]["rev_g"]["source"] == "İş Yatırım Mali Tablo (TTM)"
+    assert near(
+        ekg["metrics"]["rev_g"]["v"],
+        ekg["historical_analysis"]["summary"]["revenue_ttm_yoy"],
+        rel=0.001,
+    )
+    assert glbmd["metrics"]["ni_g"]["source"] == "İş Yatırım Mali Tablo (TTM)"
+    assert near(
+        glbmd["metrics"]["ni_g"]["v"],
+        glbmd["historical_analysis"]["summary"]["net_income_ttm_yoy"],
+        rel=0.001,
+    )
+
+    # Financial institutions must not use industrial net-margin scoring.
+    for r in (akb,albrk,ages,glbmd,isfin):
+        assert r["metrics"]["netm"]["app"] is False, (r["symbol"],r["metrics"]["netm"])
+
     # GYO: classic industrial valuation multiples must not create a valuation score.
     assert ekg["scores"]["valuation"] is None, ekg["scores"]["valuation"]
     assert ekg["metrics"]["pb"]["scoreable"] is False
