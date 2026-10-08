@@ -549,6 +549,19 @@ def overall(t,p,s,perf,history=None,validation=None,sector_code=None,sector_perf
             "Klasik F/K, PD/DD, FD/FAVÖK ve Fiyat/FCF oranlarından otomatik GYO değerleme skoru "
             "üretilmedi; gerçek değerleme için NAD/PD-NAD ve portföy ekspertiz verisi gereklidir."
         ]
+    elif p=="Holding":
+        words=[
+            f"{t['symbol']} için holding-uyumlu temel kalite skoru {fmt(s['quality'])}/100 ve "
+            f"bileşik temel skor {fmt(s['composite'])}/100 düzeyindedir. "
+            "Klasik sanayi değerleme çarpanları holding iskontosunun yerine kullanılmadı; "
+            "esas değerleme için iştirak bazlı NAD ve net nakit/borç gerekir."
+        ]
+    elif p=="Yatırım Ortaklığı":
+        words=[
+            f"{t['symbol']} için yatırım ortaklığı-uyumlu temel kalite skoru {fmt(s['quality'])}/100 ve "
+            f"bileşik temel skor {fmt(s['composite'])}/100 düzeyindedir. "
+            "Portföy/NAV verisi olmadan klasik F/K-PD/DD çarpanlarından otomatik değerleme skoru üretilmedi."
+        ]
     else:
         words=[
             f"{t['symbol']} için temel kalite skoru {fmt(s['quality'])}/100, "
@@ -711,8 +724,18 @@ def overall(t,p,s,perf,history=None,validation=None,sector_code=None,sector_perf
         )
     elif p=="Holding":
         words.append(
-            "PD/DD gerçek NAD iskontosu olarak kabul edilmez; güncel NAD verisi ayrıca sağlanmadıkça "
-            "defter değeri ile net aktif değer birbirine eşitlenmez."
+            "PD/DD gerçek NAD iskontosu olarak kabul edilmez; iştirak değerleri, holding-seviye net nakit/borç "
+            "ve halka açık/kapalı iştirak değerleri ayrıca toplanmadan defter değeri NAD kabul edilmez."
+        )
+    elif p=="Yatırım Ortaklığı":
+        words.append(
+            "Yatırım ortaklıklarında portföy/NAV verisi ana değerleme referansıdır; muhasebe kârı ve "
+            "tek dönem çarpanları portföy değer değişimleri nedeniyle tek başına yeterli değildir."
+        )
+    elif p=="Finansal":
+        words.append(
+            "Banka dışı finansal şirketlerde sanayi tipi FD/FAVÖK, FCF ve işletme sermayesi oranları "
+            "ana skordan çıkarıldı; kârlılık, özkaynak verimliliği ve bilanço yapısı önceliklidir."
         )
 
     return " ".join(words)
