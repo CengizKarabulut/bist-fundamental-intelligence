@@ -58,7 +58,7 @@ BALANCE_ROWS = {
     "total_assets": ["Toplam Varlıklar", "TOPLAM AKTİFLER", "Toplam Aktifler", "AKTİF TOPLAMI"],
     "equity": [
         "Özkaynaklar", "Toplam Özkaynaklar",
-        "Özsermaye Toplamı",
+        "Özsermaye Toplamı", "ÖZKAYNAK",
         "Ana Ortaklığa Ait Özkaynaklar",
         "XVI. ÖZKAYNAKLAR",
     ],
@@ -68,7 +68,7 @@ BALANCE_ROWS = {
     ],
     "deposits": [
         "Mevduat", "Toplam Mevduat",
-        "Mevduatlar", "I. MEVDUAT",
+        "Mevduatlar", "I. MEVDUAT", "I. TOPLANAN FONLAR", "Toplanan Fonlar",
     ],
     "financial_investments": [
         "Finansal Yatırımlar",
