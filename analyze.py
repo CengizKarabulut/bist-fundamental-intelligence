@@ -795,23 +795,21 @@ def overall(t,p,s,perf,history=None,validation=None,sector_code=None,sector_perf
     c=s["cats"]
     if p=="GYO":
         words=[
-            f"{t['symbol']} için GYO-uyumlu temel kalite skoru {fmt(s['quality'])}/100 ve "
-            f"bileşik temel skor {fmt(s['composite'])}/100 düzeyindedir. "
-            "Klasik F/K, PD/DD, FD/FAVÖK ve Fiyat/FCF oranlarından otomatik GYO değerleme skoru "
-            "üretilmedi; gerçek değerleme için NAD/PD-NAD ve portföy ekspertiz verisi gereklidir."
+            f"{t['symbol']} için operasyonel temel kalite skoru {fmt(s['quality'])}/100 düzeyindedir. "
+            "Tam bileşik değerleme skoru üretilmedi; GYO'da klasik F/K, PD/DD, FD/FAVÖK ve Fiyat/FCF "
+            "oranları NAD/PD-NAD'ın yerine geçirilmez. Gerçek değerleme için portföy ekspertiz/NAD verisi gerekir."
         ]
     elif p=="Holding":
         words=[
-            f"{t['symbol']} için holding-uyumlu temel kalite skoru {fmt(s['quality'])}/100 ve "
-            f"bileşik temel skor {fmt(s['composite'])}/100 düzeyindedir. "
-            "Klasik sanayi değerleme çarpanları holding iskontosunun yerine kullanılmadı; "
-            "esas değerleme için iştirak bazlı NAD ve net nakit/borç gerekir."
+            f"{t['symbol']} için konsolide sanayi oranlarından yapay bir holding kalite/değerleme skoru üretilmedi. "
+            "Finansal tablolar eğilim ve risk analizi için kullanılmaya devam eder; esas değerleme için iştirak bazlı "
+            "NAD, holding-seviye net nakit/borç ve halka açık/kapalı iştirak değerleri gerekir."
         ]
     elif p=="Yatırım Ortaklığı":
         words=[
-            f"{t['symbol']} için yatırım ortaklığı-uyumlu temel kalite skoru {fmt(s['quality'])}/100 ve "
-            f"bileşik temel skor {fmt(s['composite'])}/100 düzeyindedir. "
-            "Portföy/NAV verisi olmadan klasik F/K-PD/DD çarpanlarından otomatik değerleme skoru üretilmedi."
+            f"{t['symbol']} için muhasebe oranlarından yapay kalite/değerleme skoru üretilmedi. "
+            "Yatırım ortaklıklarında portföy/NAV ve piyasa değerine iskonto/prim ana referanstır; "
+            "portföy verisi olmadan klasik F/K-PD/DD çarpanları karar skoruna dönüştürülmez."
         ]
     else:
         words=[
@@ -1296,7 +1294,10 @@ def history_html(history):
 
 def html_report(t,p,a,s,g,xset,perf,comments,gen,history=None,validation=None,sector_code=None,sector_perf=None):
     e=lambda z:html.escape(str(z)); cards=[]
-    for n,v in [("Temel Kalite",s["quality"]),("Değerleme",s["valuation"]),("Bileşik",s["composite"]),("Sektör Relatif",s["rel"]["sector"]["overall"]),("BIST100 Relatif",s["rel"]["xu100"]["overall"]),("Tüm BIST Relatif",s["rel"]["bist"]["overall"])]:
+    quality_label="Operasyonel Kalite" if p=="GYO" else "Temel Kalite"
+    valuation_label="NAD Değerleme" if p in {"GYO","Holding","Yatırım Ortaklığı"} else "Değerleme"
+    composite_label="Tam Bileşik" if p in {"GYO","Holding","Yatırım Ortaklığı"} else "Bileşik"
+    for n,v in [(quality_label,s["quality"]),(valuation_label,s["valuation"]),(composite_label,s["composite"]),("Sektör Relatif",s["rel"]["sector"]["overall"]),("BIST100 Relatif",s["rel"]["xu100"]["overall"]),("Tüm BIST Relatif",s["rel"]["bist"]["overall"])]:
         cards.append(f'<div class="card"><small>{e(n)}</small><b>{e(scoretxt(v))}</b><span>{e(status(v))}</span></div>')
     readiness=report_readiness(p,history,validation)
     cards.append(
