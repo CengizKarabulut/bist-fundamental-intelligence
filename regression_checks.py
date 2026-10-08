@@ -29,6 +29,8 @@ def main():
     assert profile({"description":"Adra Gayrimenkul Yatirim Ortakligi A.S.","industry":"Financial Conglomerates","sector":"Finance"}) == "GYO"
     assert profile({"description":"Gozde Girisim Sermayesi Yatirim Ortakligi A.S.","industry":"Investment Banks/Brokers","sector":"Finance"}) == "Yatırım Ortaklığı"
     assert profile({"description":"TAV Havalimanlari Holding A.S.","industry":"Other Transportation","sector":"Transportation"}) == "Genel"
+    assert profile({"symbol":"TAVHL","description":"TAV Havalimanlari Holding A.S.","industry":"Other Transportation","sector":"Transportation"}) == "Genel"
+    assert profile({"symbol":"SISE","description":"Turkiye Sise ve Cam Fabrikalari A.S.","industry":"Home Furnishings","sector":"Consumer Durables"}) == "Genel"
     assert profile({"description":"Petkim Petrokimya Holding A.S.","industry":"Chemicals: Specialty","sector":"Process Industries"}) == "Genel"
     assert profile({"description":"Deva Holding A.S.","industry":"Pharmaceuticals: Major","sector":"Health Technology"}) == "Genel"
 
@@ -54,6 +56,7 @@ def main():
 
     ase = load("ASELS")
     akb = load("AKBNK")
+    albrk = load("ALBRK")
     ekg = load("EKGYO")
     ages = load("AGESA")
     glbmd = load("GLBMD")
@@ -61,7 +64,15 @@ def main():
 
     assert ase["profile"] == "Savunma/Teknoloji", ase["profile"]
     assert akb["profile"] == "Banka", akb["profile"]
+    assert albrk["profile"] == "Banka", albrk["profile"]
     assert ekg["profile"] == "GYO", ekg["profile"]
+
+    # Participation-bank row aliases must resolve completely.
+    ah=albrk["historical_analysis"]
+    adq=ah.get("data_quality",{})
+    assert not ah.get("error"), ah.get("error")
+    assert adq.get("core_rows_found") == adq.get("core_rows_expected") == 3, adq
+    assert adq.get("bank_operating_rows_found") == 2, adq
     assert ages["profile"] == "Sigorta", ages["profile"]
     assert glbmd["profile"] == "Finansal", glbmd["profile"]
     assert isfin["profile"] == "Finansal", isfin["profile"]
@@ -116,7 +127,7 @@ def main():
     for k in ("nde", "fcfm", "ev"):
         assert akb["metrics"][k]["app"] is False, (k, akb["metrics"][k])
 
-    print("Semantic regression checks passed: ASELS + AKBNK + EKGYO + AGESA + GLBMD + ISFIN")
+    print("Semantic regression checks passed: ASELS + AKBNK + ALBRK + EKGYO + AGESA + GLBMD + ISFIN")
 
 
 if __name__ == "__main__":
