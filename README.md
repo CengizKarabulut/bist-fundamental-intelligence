@@ -50,6 +50,8 @@ tek bir profesyonel genel değerlendirmede birleştirir.
 
 ## Veri
 
+- **BorsaPy**: KAP şirket metadata'sı, gerçek BIST endeks bileşenleri, hedef şirket için İş Yatırım mali tabloları ve BIST'e özgü doğrulama katmanı
+
 - Temel evren ve finansal karşılaştırmalar: **TradingView Screener** veri alanları
 - XU100 fiyat performansı: **Yahoo Finance**
 - Çıktılar: HTML + JSON + o çalışmada kullanılan tam BIST evreni CSV snapshot
@@ -91,3 +93,7 @@ python analyze.py ASELS
 ## Uyarı
 
 Bu proje araştırma ve veri analizi amaçlıdır. Üretilen raporlar yatırım tavsiyesi değildir.
+
+## BorsaPy entegrasyonu
+
+BorsaPy tüm BIST evreninin ağır bilanço çağrıları için kullanılmaz. Çapraz kesit karşılaştırması TradingView Screener ile hızlı tutulur; BorsaPy seçilen hisse üzerinde derin doğrulama ve tarihsel mali tablo erişimi için kullanılır. Bankalarda UFRS, diğer şirketlerde XI_29 mali tablo formatı tercih edilir.
