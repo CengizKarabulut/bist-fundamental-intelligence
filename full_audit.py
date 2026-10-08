@@ -171,6 +171,22 @@ def audit_one(
             annual_periods=0,
             load_market_info=True,
         )
+        # One controlled retry separates structural/model failures from transient
+        # provider/network errors during the 600+ company sweep.
+        if hist.get("error"):
+            time.sleep(1.0)
+            retry = build_historical_analysis(
+                sym,
+                p,
+                report_dir=None,
+                quarterly_periods=8,
+                annual_periods=0,
+                load_market_info=True,
+            )
+            if not retry.get("error"):
+                hist = retry
+            else:
+                hist["retry_error"] = retry.get("error")
     except Exception as exc:
         hist = {"error": str(exc), "profile": p}
         error_text = str(exc)
