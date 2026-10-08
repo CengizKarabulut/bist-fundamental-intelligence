@@ -8,6 +8,13 @@ on:
         required: true
         default: "ASELS"
         type: string
+  push:
+    branches: [main]
+    paths:
+      - "analyze.py"
+      - "requirements.txt"
+      - "data/**"
+      - ".github/workflows/analyze.yml"
 
 jobs:
   analyze:
@@ -30,13 +37,13 @@ jobs:
 
       - name: Hisse raporunu oluştur
         env:
-          SYMBOL: ${{ inputs.symbol }}
+          SYMBOL: ${{ github.event.inputs.symbol || 'ASELS' }}
         run: python analyze.py "$SYMBOL"
 
       - name: Raporu artifact olarak yükle
         uses: actions/upload-artifact@v4
         with:
-          name: bist-report-${{ inputs.symbol }}
+          name: bist-report-${{ github.event.inputs.symbol || 'ASELS' }}
           path: |
             reports/*.html
             reports/*.json
