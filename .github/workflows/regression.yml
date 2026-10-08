@@ -42,28 +42,28 @@ jobs:
         run: python -m py_compile analyze.py history_engine.py special_profiles.py regression_checks.py version.py
 
       - name: ASELS sanayi/savunma testi
-        run: python analyze.py ASELS
+        run: timeout 240s python analyze.py ASELS
 
       - name: AKBNK banka/UFRS testi
-        run: python analyze.py AKBNK
+        run: timeout 240s python analyze.py AKBNK
 
       - name: ALBRK katılım bankası testi
-        run: python analyze.py ALBRK
+        run: timeout 240s python analyze.py ALBRK
 
       - name: EKGYO GYO/NAD testi
-        run: python analyze.py EKGYO
+        run: timeout 240s python analyze.py EKGYO
 
       - name: KCHOL holding/NAD-gate testi
-        run: python analyze.py KCHOL
+        run: timeout 240s python analyze.py KCHOL
 
       - name: AGESA sigorta/UFRS testi
-        run: python analyze.py AGESA
+        run: timeout 240s python analyze.py AGESA
 
       - name: GLBMD desteklenen finansal/UFRS testi
-        run: python analyze.py GLBMD
+        run: timeout 240s python analyze.py GLBMD
 
       - name: ISFIN veri-yoksa graceful fallback testi
-        run: python analyze.py ISFIN
+        run: timeout 240s python analyze.py ISFIN
 
       - name: Semantik rapor kontrolleri
         run: python regression_checks.py
