@@ -381,11 +381,28 @@ def overall(t,p,s,perf,history=None,validation=None,sector_code=None,sector_perf
                 )
             ey=hs.get("equity_yoy")
             ay=hs.get("assets_yoy")
+            ly=hs.get("loans_yoy")
+            dy=hs.get("deposits_yoy")
+            nii=hs.get("net_interest_income_yoy")
+            fee=hs.get("fee_income_yoy")
+            eqa=hs.get("equity_to_assets")
             if ey is not None or ay is not None:
                 words.append(
                     f"Bilanço tarafında özkaynak büyümesi {fmt(ey,'%')}, aktif büyümesi {fmt(ay,'%')}; "
                     "banka profili için sanayi tipi net borç/FCF metrikleri ana karar setine alınmadı."
                 )
+            if ly is not None or dy is not None:
+                words.append(
+                    f"Kredi büyümesi {fmt(ly,'%')}, mevduat büyümesi {fmt(dy,'%')}; "
+                    "fonlama ile kredi genişlemesinin dengesi birlikte izleniyor."
+                )
+            if nii is not None or fee is not None:
+                words.append(
+                    f"Gelir kompozisyonunda net faiz geliri yıllık {fmt(nii,'%')}, "
+                    f"net ücret/komisyon geliri {fmt(fee,'%')} değişti."
+                )
+            if eqa is not None:
+                words.append(f"Özkaynak/aktif oranı {eqa:.1f}% seviyesinde.")
         else:
             if rev is not None or ni is not None:
                 words.append(
