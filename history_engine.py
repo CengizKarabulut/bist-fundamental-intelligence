@@ -475,10 +475,10 @@ def _build_commentary(summary: dict[str, Any], profile: str) -> dict[str, Any]:
             watch.append(f"TTM faaliyet nakit akışı/net kâr dönüşümü {conv:.2f}x.")
     capex_to_ocf=summary.get("capex_to_ocf")
     if fcf_margin is not None:
-        if profile=="GYO":
+        if profile in {"GYO","Holding","Yatırım Ortaklığı"}:
             watch.append(
-                f"TTM serbest nakit akışı marjı {_fmt(fcf_margin,'%')}. GYO/proje geliştirici yapısında "
-                "arsa-stok ve proje yatırımları nakit akışını dönemsel olarak negatife çekebildiğinden bu oran "
+                f"TTM serbest nakit akışı marjı {_fmt(fcf_margin,'%')}. {profile} yapısında iştirak/portföy/"
+                "proje yatırımları ve sınıflandırma farkları nakit akışını dönemsel olarak bozabildiğinden bu oran "
                 "sanayi şirketlerindeki gibi tek başına kalite cezası olarak yorumlanmadı."
             )
         else:
@@ -522,6 +522,21 @@ def _build_commentary(summary: dict[str, Any], profile: str) -> dict[str, Any]:
             "GYO/proje geliştirici şirketlerde satış ve kârlar teslim takvimine bağlı olarak dönemler arasında "
             "yüksek oynaklık gösterebilir; bu nedenle tek çeyrek büyüme yerine NAD, proje stoğu, teslimatlar, "
             "ön satışlar ve finansman ihtiyacı birlikte okunmalıdır."
+        )
+    elif profile=="Holding":
+        paragraphs.append(
+            "Holdinglerde konsolide gelir tablosu iştirak yapısını tam yansıtmayabilir; değerleme için iştirak bazlı "
+            "NAD, holding seviyesindeki net nakit/borç ve iskonto birlikte analiz edilmelidir."
+        )
+    elif profile=="Yatırım Ortaklığı":
+        paragraphs.append(
+            "Yatırım ortaklıklarında dönem kârı portföy değer değişimlerinden güçlü biçimde etkilenebilir; "
+            "portföy/NAV ve piyasa değerine iskonto/prim ana referans olmalıdır."
+        )
+    elif profile=="Finansal":
+        paragraphs.append(
+            "Banka dışı finansal kuruluşlarda sanayi şirketlerine özgü FAVÖK/FCF ve işletme sermayesi oranları "
+            "tek başına kullanılmamalı; özkaynak verimliliği, kârlılık ve fonlama yapısı önceliklidir."
         )
 
     return {"paragraphs": paragraphs, "strengths": strengths, "risks": risks, "watch": watch}
