@@ -95,7 +95,11 @@ def audit_symbol(row, universe_df, xu100_set, qn):
 
     # 3) Historical statement/data-quality checks.
     if hist.get("error"):
-        add_issue(issues,"CRITICAL","HISTORY_ERROR",hist["error"])
+        # Historical provider coverage can legitimately be absent for a listed
+        # company (foreign issuer / unsupported statement schema). The core
+        # cross-sectional report can still be valid, so provider unavailability
+        # is a WARNING, not an engine failure.
+        add_issue(issues,"WARNING","HISTORY_UNAVAILABLE",hist["error"])
     else:
         dq=hist.get("data_quality",{})
         found=dq.get("core_rows_found")
@@ -137,21 +141,40 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         rel=abs(tv-iy)/denom
         # valuation multiples are expected to be close; profitability can diverge
         threshold=.35 if key in {"pe","pb","ev"} else .50
-        if rel > 2.0:
-            add_issue(issues,"CRITICAL","PROVIDER_CONFLICT",f"{key}: TV={tv:.3f}, IY={iy:.3f}")
+        sign_conflict=(tv>0>iy) or (iy>0>tv)
+        if sign_conflict:
+            add_issue(issues,"WARNING","PROVIDER_BASIS_CONFLICT",f"{key}: TV={tv:.3f}, IY={iy:.3f}")
+        elif rel > 2.0:
+            add_issue(issues,"WARNING","PROVIDER_LARGE_GAP",f"{key}: TV={tv:.3f}, IY={iy:.3f}")
         elif rel > threshold:
             add_issue(issues,"WARNING","PROVIDER_CONFLICT",f"{key}: TV={tv:.3f}, IY={iy:.3f}")
 
+    # Economic-validity invariants for valuation multiples.
+    for key in ("pe","pb","ev","pfcf"):
+        x=metrics.get(key,{})
+        v=x.get("v")
+        if v is not None and float(v)<=0:
+            if x.get("scoreable") or x.get("abs") is not None:
+                add_issue(issues,"CRITICAL","NONPOSITIVE_MULTIPLE_SCORED",f"{key}={v}")
+            else:
+                add_issue(issues,"INFO","NONPOSITIVE_MULTIPLE_AD",f"{key}={v}")
+
+    # Outliers are review flags, not automatic model errors. Negative P/E/PB/EV
+    # are handled above as A/D rather than being mislabeled "extreme".
     suspicious={
-        "pe":(0,500),"pb":(0,100),"ev":(-100,300),
+        "pe":(0,500),"pb":(0,100),"ev":(0,300),
         "roe":(-1000,1000),"roa":(-500,500),
         "rev_g":(-500,2000),"eps_g":(-5000,5000),"ni_g":(-5000,5000),
         "curr":(0,100),"de":(-100,100),"nde":(-100,100),
     }
     for key,(lo,hi) in suspicious.items():
         v=metrics.get(key,{}).get("v")
-        if v is not None and (float(v)<lo or float(v)>hi):
-            add_issue(issues,"WARNING","EXTREME_VALUE",f"{key}={v}")
+        if v is None:
+            continue
+        if key in {"pe","pb","ev"} and float(v)<=0:
+            continue
+        if float(v)<lo or float(v)>hi:
+            add_issue(issues,"INFO","EXTREME_VALUE",f"{key}={v}")
 
     # 5) Universe/benchmark sanity.
     if len(g.get("all",[])) < 500:
