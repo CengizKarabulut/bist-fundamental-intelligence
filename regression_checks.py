@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from analyze import profile
+
 R = Path("reports")
 
 
@@ -20,6 +22,13 @@ def near(a, b, rel=0.02):
 
 
 def main():
+    # Provider-industry labels can be broad/misleading; company semantics must win.
+    assert profile({"description":"Haci Omer Sabanci Holding A.S.","industry":"Regional Banks","sector":"Finance"}) == "Holding"
+    assert profile({"description":"Is Yatirim Menkul Degerler AS","industry":"Investment Banks/Brokers","sector":"Finance"}) == "Finansal"
+    assert profile({"description":"Turkiye Sinai Kalkinma Bankasi A.S.","industry":"Investment Banks/Brokers","sector":"Finance"}) == "Banka"
+    assert profile({"description":"Adra Gayrimenkul Yatirim Ortakligi A.S.","industry":"Financial Conglomerates","sector":"Finance"}) == "GYO"
+    assert profile({"description":"Gozde Girisim Sermayesi Yatirim Ortakligi A.S.","industry":"Investment Banks/Brokers","sector":"Finance"}) == "Yatırım Ortaklığı"
+
     ase = load("ASELS")
     akb = load("AKBNK")
     ekg = load("EKGYO")
