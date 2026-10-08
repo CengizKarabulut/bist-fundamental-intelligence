@@ -439,11 +439,7 @@ def index_perf():
     return {"3m":None,"6m":None,"12m":None}
 
 def source_validation(t,metrics,history):
-    """Cross-check TradingView with İş Yatırım/BorsaPy.
-
-    The selected stock can have different provider definitions (especially GYO
-    valuation multiples and TMS 29 growth). Differences are surfaced explicitly.
-    """
+    """Cross-check TradingView with İş Yatırım/BorsaPy without overreacting to normal quote-time noise."""
     if not history or history.get("error"):
         return {"confidence":None,"status":"N/A","checks":[],"critical_count":0,"warning_count":0}
 
@@ -453,82 +449,94 @@ def source_validation(t,metrics,history):
     critical=0
     warning=0
 
-    # TTM / statement-derived checks.
+    def classify_pair(tv,iy,kind,warning_rel,critical_rel,warning_abs=None,critical_abs=None,basis_sensitive=False):
+        nonlocal critical,warning
+        if tv is None or iy is None:
+            return "N/A",None
+        diff=tv-iy
+        sign_conflict=(tv>0>iy) or (iy>0>tv)
+
+        if sign_conflict and kind=="%" and max(abs(tv),abs(iy))>=3:
+            critical+=1
+            return "KRİTİK FARK",diff
+
+        scale=max(abs(iy),1e-9)
+        rel=abs(diff)/scale
+        absdiff=abs(diff)
+
+        crit=(rel>critical_rel) or (critical_abs is not None and absdiff>critical_abs and rel>warning_rel)
+        warn=(rel>warning_rel) or (warning_abs is not None and absdiff>warning_abs)
+
+        if crit:
+            if basis_sensitive and not sign_conflict:
+                warning+=1
+                return "BAZ/FRESHNESS FARKI",diff
+            critical+=1
+            return "BÜYÜK FARK",diff
+        if warn:
+            warning+=1
+            return "İZLE",diff
+        return "UYUMLU",diff
+
+    # Statement-derived checks. Growth metrics are basis-sensitive because TMS29
+    # and comparative-period restatement can legitimately alter the percentage.
     specs=[
-        ("Ciro Büyümesi TTM","rev_g",h.get("revenue_ttm_yoy"),"%",10.0,True),
-        ("Net Kâr Büyümesi TTM","ni_g",h.get("net_income_ttm_yoy"),"%",15.0,True),
-        ("Faaliyet Marjı TTM","opm",h.get("ttm_operating_margin"),"%",5.0,False),
-        ("Net Marj TTM","netm",h.get("ttm_net_margin"),"%",5.0,False),
-        ("FCF Marjı TTM","fcfm",h.get("fcf_margin"),"%",5.0,False),
-        ("Cari Oran","curr",h.get("current_ratio"),"x",0.25,False),
+        ("Ciro Büyümesi TTM","rev_g",h.get("revenue_ttm_yoy"),"%",0.20,0.75,10.0,50.0,True),
+        ("Net Kâr Büyümesi TTM","ni_g",h.get("net_income_ttm_yoy"),"%",0.25,1.00,15.0,75.0,True),
+        ("Faaliyet Marjı TTM","opm",h.get("ttm_operating_margin"),"%",0.20,0.75,3.0,10.0,False),
+        ("Net Marj TTM","netm",h.get("ttm_net_margin"),"%",0.20,0.75,3.0,10.0,False),
+        ("FCF Marjı TTM","fcfm",h.get("fcf_margin"),"%",0.30,1.00,5.0,20.0,False),
+        ("Cari Oran","curr",h.get("current_ratio"),"x",0.25,1.00,0.25,2.0,False),
     ]
 
-    for label,key,hval,kind,tol,basis_sensitive in specs:
+    for label,key,hval,kind,wrel,crel,wabs,cabs,basis_sensitive in specs:
         tv=metrics.get(key,{}).get("raw_v",metrics.get(key,{}).get("v"))
         if tv is None or hval is None:
             checks.append({"label":label,"tradingview":tv,"borsapy":hval,"difference":None,"status":"N/A","kind":kind})
             continue
-        diff=tv-hval
-        sign_conflict=(tv>0>hval) or (hval>0>tv)
-        if sign_conflict and kind=="%" and max(abs(tv),abs(hval))>=3:
-            st="KRİTİK FARK"; critical+=1
-        elif abs(diff)>tol*2 and basis_sensitive:
-            st="BAZ/FRESHNESS FARKI"; warning+=1
-        elif abs(diff)>tol*2:
-            st="BÜYÜK FARK"; critical+=1
-        elif abs(diff)>tol:
-            st="İZLE"; warning+=1
-        else:
-            st="UYUMLU"
+        st,diff=classify_pair(tv,hval,kind,wrel,crel,wabs,cabs,basis_sensitive)
         checks.append({"label":label,"tradingview":tv,"borsapy":hval,"difference":diff,"status":st,"kind":kind})
 
-    # Current valuation/company-card checks from İş Yatırım itself.
+    # Current valuation/company-card checks from İş Yatırım.
     current_specs=[
-        ("Cari F/K","pe","pe","x",0.75),
-        ("Cari PD/DD","pb","pb","x",0.10),
-        ("Cari FD/FAVÖK","ev","ev_ebitda","x",1.00),
+        ("Cari F/K","pe","pe","x",0.20,0.60),
+        ("Cari PD/DD","pb","pb","x",0.15,0.50),
+        ("Cari FD/FAVÖK","ev","ev_ebitda","x",0.20,0.60),
     ]
-    for label,key,mkey,kind,tol in current_specs:
+    for label,key,mkey,kind,wrel,crel in current_specs:
         tv=metrics.get(key,{}).get("raw_v",metrics.get(key,{}).get("v"))
-        iy=market.get(mkey)
-        iy=fnum(iy)
+        iy=fnum(market.get(mkey))
+
         if tv is not None and iy is None:
-            # In GYO valuation fields İş Yatırım frequently reports A/D when
-            # realised earnings/EBITDA make the multiple economically meaningless.
-            # Outside that profile, a missing scrape is treated as N/A rather than
-            # automatically assuming A/D.
             is_gyo_ad=(
                 history.get("profile")=="GYO"
                 and history.get("market_source_available",False)
                 and key in {"pe","ev"}
             )
-            st="İŞ YATIRIM A/D" if is_gyo_ad else "N/A"
+            if is_gyo_ad:
+                st="İŞ YATIRIM A/D - YÖNETİLDİ"
+                warning+=1
+            else:
+                st="N/A"
             checks.append({
                 "label":label,"tradingview":tv,"borsapy":None,"difference":None,
                 "status":st,"kind":kind
             })
-            if is_gyo_ad:
-                critical+=1
         elif tv is None or iy is None:
             checks.append({"label":label,"tradingview":tv,"borsapy":iy,"difference":None,"status":"N/A","kind":kind})
         else:
-            diff=tv-iy
-            if abs(diff)>tol*2:
-                st="BÜYÜK FARK"; critical+=1
-            elif abs(diff)>tol:
-                st="İZLE"; warning+=1
-            else:
-                st="UYUMLU"
+            st,diff=classify_pair(tv,iy,kind,wrel,crel)
             checks.append({"label":label,"tradingview":tv,"borsapy":iy,"difference":diff,"status":st,"kind":kind})
 
-    # Market cap check.
+    # Market cap: small differences are expected when quotes are captured at
+    # different timestamps. Escalate only material divergences.
     tv_mcap=fnum(t.get("market_cap_basic"))
     iy_mcap=fnum(market.get("market_cap"))
     if tv_mcap is not None and iy_mcap is not None and iy_mcap!=0:
-        diff_pct=(tv_mcap/iy_mcap-1.0)*100.0
-        if abs(diff_pct)>10:
+        rel=abs(tv_mcap-iy_mcap)/abs(iy_mcap)
+        if rel>0.25:
             st="BÜYÜK FARK"; critical+=1
-        elif abs(diff_pct)>2:
+        elif rel>0.05:
             st="İZLE"; warning+=1
         else:
             st="UYUMLU"
@@ -537,14 +545,14 @@ def source_validation(t,metrics,history):
             "difference":(tv_mcap-iy_mcap)/1e9,"status":st,"kind":"B TL"
         })
 
-    # Net-debt reconciliation: financial statements vs İş Yatırım company card.
+    # Net-debt reconciliation: statement-derived vs İş Yatırım company card.
     stmt_nd=fnum(h.get("net_debt_statement"))
     iy_nd=fnum(market.get("net_debt"))
     if stmt_nd is not None and iy_nd is not None and iy_nd!=0:
-        diff_pct=(stmt_nd/iy_nd-1.0)*100.0
-        if abs(diff_pct)>15:
+        rel=abs(stmt_nd-iy_nd)/abs(iy_nd)
+        if rel>0.25:
             st="BÜYÜK FARK"; critical+=1
-        elif abs(diff_pct)>5:
+        elif rel>0.10:
             st="İZLE"; warning+=1
         else:
             st="UYUMLU"
@@ -553,7 +561,7 @@ def source_validation(t,metrics,history):
             "difference":(stmt_nd-iy_nd)/1e9,"status":st,"kind":"B TL"
         })
 
-    confidence=max(0.0,100.0-critical*15.0-warning*5.0)
+    confidence=max(0.0,100.0-critical*20.0-warning*5.0)
     status_text="YÜKSEK" if confidence>=85 else "ORTA" if confidence>=65 else "DÜŞÜK"
     return {
         "confidence":confidence,
