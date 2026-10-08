@@ -12,6 +12,7 @@ on:
     branches: [main]
     paths:
       - "analyze.py"
+      - "history_engine.py"
       - "requirements.txt"
       - ".github/workflows/analyze.yml"
 
