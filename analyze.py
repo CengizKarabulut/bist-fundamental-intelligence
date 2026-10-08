@@ -115,7 +115,7 @@ def profile(r):
         if sym in _official_members("XBANK"):return "Banka"
         if sym in _official_members("XSGRT"):return "Sigorta"
         if sym in _official_members("XYORT"):return "Yatırım Ortaklığı"
-        if sym in _official_members("XHOLD"):return "Holding"
+        if sym in _official_members("XHOLD") and sym not in OPERATING_XHOLD_OVERRIDES:return "Holding"
 
     # Semantic fallback if index membership is temporarily unavailable.
     if "gayrimenkul yatirim ortakligi" in d or "gayrimenkul yatırım ortaklığı" in d:
