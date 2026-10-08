@@ -8,14 +8,6 @@ on:
         required: true
         default: "ASELS"
         type: string
-  push:
-    branches: [main]
-    paths:
-      - "analyze.py"
-      - "history_engine.py"
-      - "requirements.txt"
-      - ".github/workflows/analyze.yml"
-
 jobs:
   analyze:
     runs-on: ubuntu-latest
