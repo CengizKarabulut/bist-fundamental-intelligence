@@ -1274,59 +1274,6 @@ def html_report(t,p,a,s,g,xset,perf,comments,gen,history=None,validation=None,se
     sec=str(t.get('sector') or 'N/A'); ind=str(t.get('industry') or 'N/A'); name=str(t.get('description') or t.get('name') or t['symbol'])
     return f'''<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(t['symbol'])} — BIST Fundamental Intelligence</title><style>body{{font-family:Arial;background:#0d1117;color:#e6edf3;margin:0;line-height:1.5}}main{{max-width:1500px;margin:auto;padding:28px}}small{{display:block;color:#8b949e}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}.card,section,.note{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px}}.card b{{display:block;font-size:26px}}.table{{overflow:auto;margin:18px 0}}table{{width:100%;min-width:1100px;border-collapse:collapse;background:#161b22}}th,td{{padding:9px;border:1px solid #30363d;text-align:right;vertical-align:top}}th:first-child,td:first-child{{text-align:left}}th{{background:#21262d}}section{{margin:10px 0}}section h3{{margin:0 0 6px;font-size:16px}}section p{{margin:0}}.note{{border-left:4px solid #d29922}}.expert{{border-left-color:#3fb950}}</style></head><body><main><h1>{e(t['symbol'])} — Fundamental Intelligence Report</h1><p>{e(name)} · Profil: {e(p)} · Sektör: {e(sec)} · Endüstri: {e(ind)} · {e(gen)}</p><div class="grid">{''.join(cards)}</div><h2>Profesyonel Genel Değerlendirme</h2><div class="note expert">{e(overall(t,p,s,perf,history,validation,sector_code,sector_perf))}</div>{special_profile_html(history)}{history_html(history)}{validation_html(validation)}<h2>Kategori Özeti</h2><div class="table"><table><tr><th>Kategori</th><th>Mutlak</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(cr)}</table></div><h2>Tüm Finansal Faktörler</h2><div class="note"><b>Veri otoritesi:</b> hedef hissede İş Yatırım tarafından sağlanan F/K, PD/DD, FD/FAVÖK, ROE ve ROA önceliklidir; diğer çapraz-kesit metrikleri TradingView'den gelir. Tarihsel mali tablolar BorsaPy/İş Yatırım katmanından alınır. Kaynaklar ayrışırsa fark gizlenmez. Karşılaştırma sabit emsal sayısıyla değil, güncel endüstri/sektör, BIST100 ve tüm BIST dağılımlarıyla yapılır.</div><div class="table"><table><tr><th>Metrik</th><th>{e(t['symbol'])}</th><th>Kaynak</th><th>Mutlak</th><th>Endüstri</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(rows)}</table></div><h2>Faktör Bazlı Uzman Yorumları</h2>{''.join(blocks)}<h2>Endeks ve Sektör Fiyat Relatif Performansı</h2><div class="table"><table><tr><th>Dönem</th><th>{e(t['symbol'])}</th><th>XU100</th><th>XU100 Alfa</th><th>{e(sector_code or 'Sektör Endeksi N/A')}</th><th>Sektör Alfa</th></tr>{''.join(pr)}</table></div><h2>Kapsam</h2><div class="grid"><div class="card"><small>BIST Pay/Kotasyon</small><b>{g.get('raw_count','N/A')}</b></div><div class="card"><small>Benzersiz BIST Şirketi</small><b>{len(g['all'])}</b></div><div class="card"><small>Sektör</small><b>{len(g['sector'])}</b><span>{e(sec)}</span></div><div class="card"><small>Endüstri</small><b>{len(g['industry'])}</b><span>{e(ind)}</span></div><div class="card"><small>BIST100 üyeleri</small><b>{len(xset) if xset else 'N/A'}</b></div></div><p class="note">Eksik veri uydurulmaz. Mutlak referans bantları evrensel kesinlik değil, finansal oran mantığı + profil kalibrasyonudur. GYO/Holding için PD/DD gerçek NAD iskontosu değildir. Araştırma amaçlıdır; yatırım tavsiyesi değildir.</p></main></body></html>'''
 
-def borsapy_target_context(sym,p):
-    """BIST-specific deep context for the selected stock.
-
-    Uses BorsaPy for KAP metadata, exact market metrics, and financial statement
-    availability. Heavy statement retrieval is only done for the selected stock,
-    never for the whole BIST universe.
-    """
-    out={"source":"borsapy","kap":{},"market":{},"financials":{}}
-    try:
-        stock=bp.Ticker(sym)
-        info=stock.info.todict() if hasattr(stock.info,"todict") else dict(stock.info)
-        out["kap"]={
-            "sector":info.get("sector"),
-            "industry":info.get("industry"),
-            "website":info.get("website"),
-            "business_summary":info.get("longBusinessSummary"),
-        }
-        out["market"]={
-            "market_cap":info.get("marketCap"),
-            "pe":info.get("trailingPE"),
-            "pb":info.get("priceToBook"),
-            "ev_ebitda":info.get("enterpriseToEbitda"),
-            "net_debt":info.get("netDebt"),
-            "foreign_ratio":info.get("foreignRatio"),
-            "dividend_yield":info.get("dividendYield"),
-        }
-
-        group="UFRS" if p=="Banka" else "XI_29"
-        try:
-            bs=stock.get_balance_sheet(quarterly=True,financial_group=group,last_n=8)
-            out["financials"]["balance_sheet_periods"]=list(bs.columns)
-            out["financials"]["balance_sheet_rows"]=int(len(bs))
-        except Exception as exc:
-            out["financials"]["balance_sheet_error"]=str(exc)
-
-        try:
-            inc=stock.get_income_stmt(quarterly=True,financial_group=group,last_n=8)
-            out["financials"]["income_stmt_periods"]=list(inc.columns)
-            out["financials"]["income_stmt_rows"]=int(len(inc))
-        except Exception as exc:
-            out["financials"]["income_stmt_error"]=str(exc)
-
-        if p!="Banka":
-            try:
-                cf=stock.get_cashflow(quarterly=True,financial_group=group,last_n=8)
-                out["financials"]["cashflow_periods"]=list(cf.columns)
-                out["financials"]["cashflow_rows"]=int(len(cf))
-            except Exception as exc:
-                out["financials"]["cashflow_error"]=str(exc)
-    except Exception as exc:
-        out["error"]=str(exc)
-    return out
-
 def safe(v):
     if isinstance(v,dict):return {str(k):safe(x) for k,x in v.items()}
     if isinstance(v,list):return [safe(x) for x in v]
