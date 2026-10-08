@@ -262,6 +262,20 @@ def _discrete_from_ytd(series: pd.Series) -> pd.Series:
     return pd.Series(out, dtype=float).sort_index(key=lambda idx: idx.map(_qkey))
 
 
+def _value_at(series: pd.Series, key) -> float | None:
+    try:
+        if series is None or series.empty or key not in series.index:
+            return None
+        value=series[key]
+        if isinstance(value,pd.Series):
+            value=value.iloc[-1]
+        if value is None or pd.isna(value):
+            return None
+        value=float(value)
+        return value if math.isfinite(value) else None
+    except Exception:
+        return None
+
 def _latest(series: pd.Series) -> float | None:
     if series is None or series.empty:
         return None
@@ -817,40 +831,22 @@ def build_historical_analysis(
         current_ratio_now = _safe_ratio(ca_now, cl_now)
         current_ratio_old = _safe_ratio(ca_old, cl_old)
 
-        # Own-history metrics. ROE/ROA use end-period balances as a robust
-        # approximation because average-equity/average-assets are not guaranteed
-        # to be available consistently across all provider schemas.
+        # Own-history metrics. ROE/ROA use end-period balances as a
+        # consistent approximation because average balances are not guaranteed
+        # across all provider schemas.
         annual_history=[]
         annual_years=sorted(
-            set(str(x) for x in annual_rev.index) |
-            set(str(x) for x in annual_ni.index) |
-            set(str(x) for x in annual_eq.index) |
-            set(str(x) for x in annual_assets.index),
+            set(str(x) for x in annual_rev.index)
+            | set(str(x) for x in annual_ni.index)
+            | set(str(x) for x in annual_eq.index)
+            | set(str(x) for x in annual_assets.index),
             key=lambda x: int(x) if str(x).isdigit() else 0,
         )
         for year in annual_years:
-            rev_a=_num_at(annual_rev,year) if "_num_at" in globals() else None
-            ni_a=_num_at(annual_ni,year) if "_num_at" in globals() else None
-            eq_a=_num_at(annual_eq,year) if "_num_at" in globals() else None
-            assets_a=_num_at(annual_assets,year) if "_num_at" in globals() else None
-            # Inline fallback; keeps compatibility if helper is not present.
-            if rev_a is None and year in annual_rev.index:
-                rev_a=_safe_num(annual_rev[year]) if "_safe_num" in globals() else None
-            if ni_a is None and year in annual_ni.index:
-                ni_a=_safe_num(annual_ni[year]) if "_safe_num" in globals() else None
-            if eq_a is None and year in annual_eq.index:
-                eq_a=_safe_num(annual_eq[year]) if "_safe_num" in globals() else None
-            if assets_a is None and year in annual_assets.index:
-                assets_a=_safe_num(annual_assets[year]) if "_safe_num" in globals() else None
-            # Direct numeric conversion fallback.
-            try: rev_a=float(annual_rev[year]) if year in annual_rev.index and pd.notna(annual_rev[year]) else rev_a
-            except Exception: pass
-            try: ni_a=float(annual_ni[year]) if year in annual_ni.index and pd.notna(annual_ni[year]) else ni_a
-            except Exception: pass
-            try: eq_a=float(annual_eq[year]) if year in annual_eq.index and pd.notna(annual_eq[year]) else eq_a
-            except Exception: pass
-            try: assets_a=float(annual_assets[year]) if year in annual_assets.index and pd.notna(annual_assets[year]) else assets_a
-            except Exception: pass
+            rev_a=_value_at(annual_rev,year)
+            ni_a=_value_at(annual_ni,year)
+            eq_a=_value_at(annual_eq,year)
+            assets_a=_value_at(annual_assets,year)
             annual_history.append({
                 "year":year,
                 "revenue":rev_a,
