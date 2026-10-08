@@ -24,6 +24,7 @@ jobs:
   audit:
     name: Shard ${{ matrix.shard }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -41,7 +42,7 @@ jobs:
       - name: Sözdizimi kontrolü
         run: python -m py_compile analyze.py history_engine.py special_profiles.py audit_all.py audit_merge.py
       - name: Tüm BIST shard audit
-        run: python audit_all.py --shard-index ${{ matrix.shard }} --shard-count 8 --quarterly 8
+        run: python audit_all.py --shard-index ${{ matrix.shard }} --shard-count 8 --quarterly 8 --symbol-timeout 45
       - name: Shard sonucunu yükle
         uses: actions/upload-artifact@v4
         with:
@@ -54,6 +55,7 @@ jobs:
     needs: audit
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -62,7 +64,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Merge bağımlılıkları
-        run: pip install pandas>=2.2
+        run: pip install "pandas>=2.2,<3.0"
       - name: Shard artifactlarını indir
         uses: actions/download-artifact@v4
         with:
