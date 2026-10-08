@@ -851,6 +851,11 @@ def overall(t,p,s,perf,history=None,validation=None,sector_code=None,sector_perf
         if risks:
             words.append("Başlıca tarihsel risk/izleme alanları: "+" ".join(risks[:2]))
 
+        sp=history.get("special_profile_analysis",{})
+        sp_comments=sp.get("commentary",[]) if isinstance(sp,dict) else []
+        if sp_comments:
+            words.append("Özel profil teyidi: "+" ".join(sp_comments[:3]))
+
     rs=s["rel"]["sector"]["overall"]
     rx=s["rel"]["xu100"]["overall"]
     rb=s["rel"]["bist"]["overall"]
