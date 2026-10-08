@@ -31,12 +31,14 @@ results=sorted(by_symbol.values(),key=lambda r:r["symbol"])
 status_counts=Counter(r.get("status","ERROR") for r in results)
 profile_counts=Counter(r.get("profile","N/A") for r in results)
 issue_counts=Counter()
-issue_symbols=defaultdict(list)
+issue_symbol_sets=defaultdict(set)
 for r in results:
+    sym=r.get("symbol")
     for x in r.get("issues",[]):
         code=x.get("code","UNKNOWN")
         issue_counts[code]+=1
-        issue_symbols[code].append(r.get("symbol"))
+        if sym:
+            issue_symbol_sets[code].add(sym)
 
 summary={
     "generated_at":datetime.now().isoformat(timespec="seconds"),
@@ -47,7 +49,12 @@ summary={
     "profile_counts":dict(profile_counts),
     "issue_counts":dict(issue_counts),
     "top_issues":[
-        {"code":code,"count":count,"symbols":issue_symbols[code][:100]}
+        {
+            "code":code,
+            "occurrence_count":count,
+            "company_count":len(issue_symbol_sets[code]),
+            "symbols":sorted(issue_symbol_sets[code])[:100],
+        }
         for code,count in issue_counts.most_common()
     ],
 }
@@ -82,8 +89,12 @@ for k in ["ERROR","CRITICAL","WARNING","INFO","OK"]:
     lines.append(f"- {k}: **{status_counts.get(k,0)}**")
 lines += ["","## En sık hata/uyarı kodları"]
 for code,count in issue_counts.most_common(25):
-    sample=", ".join(issue_symbols[code][:20])
-    lines.append(f"- **{code}**: {count} şirket — {sample}")
+    symbols=sorted(issue_symbol_sets[code])
+    sample=", ".join(symbols[:20])
+    lines.append(
+        f"- **{code}**: {len(symbols)} şirket / {count} bulgu"
+        + (f" — {sample}" if sample else "")
+    )
 lines += ["","## Profil dağılımı"]
 for k,v in sorted(profile_counts.items()):
     lines.append(f"- {k}: {v}")
