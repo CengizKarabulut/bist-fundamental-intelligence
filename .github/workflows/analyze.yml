@@ -13,7 +13,6 @@ on:
     paths:
       - "analyze.py"
       - "requirements.txt"
-      - "data/**"
       - ".github/workflows/analyze.yml"
 
 jobs:
@@ -47,5 +46,6 @@ jobs:
           path: |
             reports/*.html
             reports/*.json
+            reports/*.csv
           if-no-files-found: error
           retention-days: 14

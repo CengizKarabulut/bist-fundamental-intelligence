@@ -1,776 +1,276 @@
 from __future__ import annotations
 
-import argparse
-import html
-import json
-import math
-import statistics
+import argparse, html, json, math, re, statistics
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import yfinance as yf
+from tradingview_screener import Query, col
 
 ROOT = Path(__file__).resolve().parent
-DATA_FILE = ROOT / "data" / "universe.csv"
-REPORT_DIR = ROOT / "reports"
+REPORTS = ROOT / "reports"
 
-PROFILE_THRESHOLDS = {
-    "Banka": {
-        "pe": ("low", 5.0, 12.0),
-        "pb": ("low", 0.7, 2.0),
-        "roe": ("high", 12.0, 25.0),
-        "roa": ("high", 1.0, 3.0),
-        "revenue_growth": ("high", 0.0, 20.0),
-        "earnings_growth": ("high", 0.0, 30.0),
-    },
-    "Savunma/Teknoloji": {
-        "pe": ("low", 18.0, 55.0),
-        "pb": ("low", 2.0, 8.0),
-        "roe": ("high", 10.0, 25.0),
-        "roa": ("high", 4.0, 12.0),
-        "revenue_growth": ("high", 5.0, 40.0),
-        "earnings_growth": ("high", 5.0, 50.0),
-    },
-    "Genel": {
-        "pe": ("low", 8.0, 30.0),
-        "pb": ("low", 0.8, 4.0),
-        "roe": ("high", 8.0, 25.0),
-        "roa": ("high", 3.0, 12.0),
-        "revenue_growth": ("high", 0.0, 30.0),
-        "earnings_growth": ("high", 0.0, 30.0),
-    },
+FIELDS = [
+    "name","description","exchange","close","market_cap_basic","sector","industry","index",
+    "price_earnings_ttm","price_book_fq","enterprise_value_ebitda_current","price_free_cash_flow_ttm",
+    "return_on_equity","return_on_assets","return_on_invested_capital",
+    "total_revenue_yoy_growth_ttm","earnings_per_share_diluted_yoy_growth_ttm","net_income_yoy_growth_ttm",
+    "gross_profit_margin_ttm","operating_margin_ttm","after_tax_margin","ebitda_margin_ttm",
+    "current_ratio_fq","quick_ratio_fq","debt_to_equity_fq","net_debt_to_ebitda_fq",
+    "shrhldrs_equity_to_total_assets_fq","free_cash_flow_margin_ttm","piotroski_f_score_ttm",
+    "dividends_yield_current","Perf.3M","Perf.6M","Perf.Y",
+]
+
+M = {
+    "pe":("price_earnings_ttm","F/K","Değerleme","low","x",1.0),
+    "pb":("price_book_fq","PD/DD","Değerleme","low","x",0.7),
+    "ev":("enterprise_value_ebitda_current","FD/FAVÖK","Değerleme","low","x",1.0),
+    "pfcf":("price_free_cash_flow_ttm","Fiyat/FCF","Değerleme","low","x",0.8),
+    "roe":("return_on_equity","ROE","Kârlılık","high","%",1.0),
+    "roa":("return_on_assets","ROA","Kârlılık","high","%",0.7),
+    "roic":("return_on_invested_capital","ROIC","Kârlılık","high","%",0.9),
+    "gross":("gross_profit_margin_ttm","Brüt Marj","Kârlılık","high","%",0.5),
+    "opm":("operating_margin_ttm","Faaliyet Marjı","Kârlılık","high","%",0.8),
+    "netm":("after_tax_margin","Net Marj","Kârlılık","high","%",0.8),
+    "ebitdam":("ebitda_margin_ttm","FAVÖK Marjı","Kârlılık","high","%",0.7),
+    "rev_g":("total_revenue_yoy_growth_ttm","Ciro Büyümesi","Büyüme","high","%",1.0),
+    "eps_g":("earnings_per_share_diluted_yoy_growth_ttm","EPS Büyümesi","Büyüme","high","%",1.0),
+    "ni_g":("net_income_yoy_growth_ttm","Net Kâr Büyümesi","Büyüme","high","%",0.8),
+    "curr":("current_ratio_fq","Cari Oran","Finansal Sağlık","high","x",0.6),
+    "quick":("quick_ratio_fq","Likidite Oranı","Finansal Sağlık","high","x",0.5),
+    "de":("debt_to_equity_fq","Borç/Özsermaye","Finansal Sağlık","low","x",0.8),
+    "nde":("net_debt_to_ebitda_fq","Net Borç/FAVÖK","Finansal Sağlık","low","x",1.0),
+    "eq_assets":("shrhldrs_equity_to_total_assets_fq","Özsermaye/Varlık","Finansal Sağlık","high","x",0.7),
+    "fcfm":("free_cash_flow_margin_ttm","FCF Marjı","Nakit Kalitesi","high","%",1.0),
+    "pio":("piotroski_f_score_ttm","Piotroski F-Score","Nakit Kalitesi","high","n",0.8),
+    "div":("dividends_yield_current","Temettü Verimi","Bilgi","high","%",0.0),
 }
+CATS=["Büyüme","Kârlılık","Finansal Sağlık","Nakit Kalitesi","Değerleme"]
 
-METRIC_LABELS = {
-    "pe": "F/K",
-    "pb": "PD/DD",
-    "roe": "ROE",
-    "roa": "ROA",
-    "revenue_growth": "Ciro Büyümesi",
-    "earnings_growth": "Kâr / EPS Büyümesi",
-    "operating_margin": "Faaliyet Marjı",
-    "profit_margin": "Net Kâr Marjı",
-    "debt_to_equity": "Borç / Özsermaye",
-    "current_ratio": "Cari Oran",
-    "enterprise_to_ebitda": "FD/FAVÖK",
-    "fcf_yield": "FCF Verimi",
-    "dividend_yield": "Temettü Verimi",
+BANDS={
+    "pe":("low",10,30),"pb":("low",1,4),"ev":("low",6,15),"pfcf":("low",12,30),
+    "roe":("high",8,20),"roa":("high",3,10),"roic":("high",6,15),
+    "gross":("high",15,35),"opm":("high",5,18),"netm":("high",3,15),"ebitdam":("high",8,22),
+    "rev_g":("high",0,25),"eps_g":("high",0,30),"ni_g":("high",0,30),
+    "curr":("high",0.9,1.7),"quick":("high",0.6,1.1),"de":("low",0.5,2),"nde":("low",1,4),
+    "eq_assets":("high",0.2,0.5),"fcfm":("high",0,12),"pio":("high",3,7),
 }
-
-PCT_KEYS = {
-    "roe", "roa", "revenue_growth", "earnings_growth",
-    "operating_margin", "profit_margin", "fcf_yield", "dividend_yield",
+OVR={
+    "Banka":{"pe":("low",5,12),"pb":("low",0.7,2),"roe":("high",12,25),"roa":("high",1,3),"eq_assets":("high",0.06,0.14),"eps_g":("high",0,30),"ni_g":("high",0,30)},
+    "Sigorta":{"pe":("low",6,16),"pb":("low",1,3.5),"roe":("high",12,30),"roa":("high",1.5,5)},
+    "Savunma/Teknoloji":{"pe":("low",18,55),"pb":("low",2,8),"ev":("low",10,30),"roe":("high",10,25),"roa":("high",4,12),"rev_g":("high",5,40),"eps_g":("high",5,50)},
 }
+BANK_SKIP={"ev","pfcf","roic","gross","opm","ebitdam","rev_g","curr","quick","de","nde","fcfm"}
+INS_SKIP={"ev","pfcf","curr","quick","de","nde","fcfm"}
 
 
-def clean_float(value: Any) -> float | None:
+def fnum(v):
     try:
-        if value is None:
-            return None
-        x = float(value)
-        return x if math.isfinite(x) else None
-    except (TypeError, ValueError):
-        return None
+        if v is None or pd.isna(v): return None
+        x=float(v); return x if math.isfinite(x) else None
+    except: return None
 
+def fmt(v,k="n"):
+    if v is None:return "N/A"
+    return f"{v:.2f}%" if k=="%" else f"{v:.2f}x" if k=="x" else f"{v:.2f}"
 
-def pct_from_fraction(value: Any) -> float | None:
-    x = clean_float(value)
-    if x is None:
-        return None
-    return x * 100.0 if abs(x) <= 5 else x
+def status(s):
+    if s is None:return "N/A"
+    return "Çok güçlü" if s>=75 else "Güçlü" if s>=60 else "Dengeli" if s>=45 else "Zayıf" if s>=30 else "Çok zayıf"
 
+def profile(r):
+    sec=str(r.get("sector") or "").lower(); ind=str(r.get("industry") or "").lower(); d=str(r.get("description") or r.get("name") or "").lower()
+    if "bank" in ind:return "Banka"
+    if "insurance" in ind:return "Sigorta"
+    if "real estate investment" in ind or "reit" in ind:return "GYO"
+    if "financial conglomerate" in ind or "holding" in d:return "Holding"
+    if any(x in ind for x in ["aerospace","defense","electronic equipment","computer communications"]) or "electronic technology" in sec or "technology services" in sec:return "Savunma/Teknoloji"
+    return "Genel"
 
-def yahoo_symbol(symbol: str) -> str:
-    symbol = symbol.strip().upper().replace(".IS", "")
-    return f"{symbol}.IS"
+def applicable(k,p):
+    return not (p=="Banka" and k in BANK_SKIP) and not (p=="Sigorta" and k in INS_SKIP)
 
+def band(k,p): return OVR.get(p,{}).get(k) or BANDS.get(k)
 
-def get_info(symbol: str) -> dict[str, Any]:
-    ticker = yf.Ticker(yahoo_symbol(symbol))
+def abs_score(v,b):
+    if v is None or b is None:return None
+    d,a,z=b
+    if d=="high": return 0 if v<=a else 100 if v>=z else (v-a)/(z-a)*100
+    return 100 if v<=a else 0 if v>=z else (z-v)/(z-a)*100
+
+def symbol(t): return str(t).split(":")[-1].upper()
+
+def entity(r):
+    s=str(r.get("description") or r.get("name") or r.get("symbol") or "").casefold()
+    s=re.sub(r"\b(class|series)\s+[a-z0-9]+\b","",s); s=re.sub(r"\b[a-z]\s+grubu\b","",s)
+    return re.sub(r"\s+"," ",s).strip(" -.,")
+
+def universe():
+    _,df=(Query().select(*FIELDS).set_markets("turkey").where(col("exchange")=="BIST",col("is_primary")==True,col("type")=="stock").order_by("market_cap_basic",ascending=False,nulls_first=False).limit(1000).get_scanner_data())
+    if df is None or df.empty: raise RuntimeError("BIST evreni alınamadı")
+    df=df.copy(); df["symbol"]=df["ticker"].map(symbol); return df
+
+def xu100(u):
     try:
-        info = ticker.info or {}
-    except Exception:
-        info = {}
-    try:
-        fast = dict(ticker.fast_info or {})
-    except Exception:
-        fast = {}
+        _,d=Query().select("name","exchange").set_index("SYML:BIST;XU100").limit(200).get_scanner_data()
+        x={symbol(t) for t in d["ticker"].tolist()} if d is not None and not d.empty else set()
+        if len(x)>=80:return x
+    except: pass
+    if "index" in u:
+        m=u["index"].astype(str).str.contains(r"XU100|BIST 100",case=False,na=False,regex=True); x=set(u.loc[m,"symbol"])
+        if x:return x
+    return set()
 
-    price = clean_float(
-        fast.get("last_price")
-        or info.get("currentPrice")
-        or info.get("regularMarketPrice")
-        or info.get("previousClose")
-    )
-    eps = clean_float(info.get("trailingEps"))
-    bvps = clean_float(info.get("bookValue"))
-    market_cap = clean_float(fast.get("market_cap") or info.get("marketCap"))
-    fcf = clean_float(info.get("freeCashflow"))
+def dedupe(df):
+    d=df.copy(); d["_e"]=d.apply(entity,axis=1); d=d.sort_values("market_cap_basic",ascending=False,na_position="last").drop_duplicates("_e"); return d.drop(columns="_e")
 
-    pe = clean_float(info.get("trailingPE"))
-    if pe is None and price and eps and eps > 0:
-        pe = price / eps
+def vals(df,k):
+    fld=M[k][0]
+    if df.empty or fld not in df:return pd.Series(dtype=float)
+    s=pd.to_numeric(df[fld],errors="coerce").dropna().astype(float)
+    if k in {"pe","pb","ev","pfcf"}:s=s[s>0]
+    return s
 
-    pb = clean_float(info.get("priceToBook"))
-    if pb is None and price and bvps and bvps > 0:
-        pb = price / bvps
+def med(df,k):
+    s=vals(df,k); return float(s.median()) if len(s) else None
 
-    return {
-        "symbol": symbol.upper().replace(".IS", ""),
-        "name": info.get("longName") or info.get("shortName") or symbol,
-        "provider_symbol": yahoo_symbol(symbol),
-        "sector_provider": info.get("sector") or "",
-        "industry_provider": info.get("industry") or "",
-        "currency": info.get("currency") or "TRY",
-        "price": price,
-        "market_cap": market_cap,
-        "pe": pe,
-        "pb": pb,
-        "roe": pct_from_fraction(info.get("returnOnEquity")),
-        "roa": pct_from_fraction(info.get("returnOnAssets")),
-        "revenue_growth": pct_from_fraction(info.get("revenueGrowth")),
-        "earnings_growth": pct_from_fraction(
-            info.get("earningsGrowth")
-            if info.get("earningsGrowth") is not None
-            else info.get("earningsQuarterlyGrowth")
-        ),
-        "operating_margin": pct_from_fraction(info.get("operatingMargins")),
-        "profit_margin": pct_from_fraction(info.get("profitMargins")),
-        "debt_to_equity": clean_float(info.get("debtToEquity")),
-        "current_ratio": clean_float(info.get("currentRatio")),
-        "enterprise_to_ebitda": clean_float(info.get("enterpriseToEbitda")),
-        "dividend_yield": pct_from_fraction(info.get("dividendYield")),
-        "free_cash_flow": fcf,
-        "fcf_yield": (fcf / market_cap * 100.0)
-        if fcf is not None and market_cap and market_cap > 0
-        else None,
-    }
+def pct(df,k,v):
+    if v is None:return None
+    s=vals(df,k)
+    if not len(s):return None
+    return float(((s<=v) if M[k][3]=="high" else (s>=v)).mean()*100)
 
+def wavg(items):
+    q=[(s,w) for s,w in items if s is not None and w>0]
+    return sum(s*w for s,w in q)/sum(w for _,w in q) if q else None
 
-def get_close(symbol: str, period: str = "2y") -> pd.Series:
-    candidates = [yahoo_symbol(symbol)]
-    if symbol.upper() == "XU100":
-        candidates = ["XU100.IS", "^XU100"]
+def groups(u,t,xset):
+    du=dedupe(u); e=entity(t); p=du[du.apply(entity,axis=1)!=e]
+    sec=str(t.get("sector") or ""); ind=str(t.get("industry") or "")
+    return {"industry":p[p["industry"].astype(str).str.casefold()==ind.casefold()] if ind else p.iloc[0:0],"sector":p[p["sector"].astype(str).str.casefold()==sec.casefold()] if sec else p.iloc[0:0],"xu100":p[p["symbol"].isin(xset)] if xset else p.iloc[0:0],"bist":p,"all":du}
 
-    for candidate in candidates:
-        try:
-            data = yf.download(
-                candidate,
-                period=period,
-                interval="1d",
-                auto_adjust=False,
-                progress=False,
-                threads=False,
-            )
-        except Exception:
-            continue
-
-        if data.empty:
-            continue
-
-        close = data["Close"]
-        if isinstance(close, pd.DataFrame):
-            close = close.iloc[:, 0]
-
-        close = close.dropna().astype(float)
-        if not close.empty:
-            return close
-
-    return pd.Series(dtype=float)
-
-
-def load_universe() -> pd.DataFrame:
-    df = pd.read_csv(DATA_FILE)
-    for col in ("symbol", "profile", "sector_group", "industry_group"):
-        df[col] = df[col].fillna("").astype(str).str.strip()
-    return df
-
-
-def metadata_for(df: pd.DataFrame, symbol: str) -> dict[str, str]:
-    hit = df[df["symbol"].str.upper() == symbol.upper()]
-    if hit.empty:
-        return {
-            "symbol": symbol.upper(),
-            "profile": "Genel",
-            "sector_group": "",
-            "industry_group": "",
-        }
-    return hit.iloc[0].to_dict()
-
-
-def choose_peers(
-    df: pd.DataFrame,
-    symbol: str,
-    meta: dict[str, str],
-    max_peers: int = 25,
-) -> tuple[list[str], str]:
-    symbol = symbol.upper()
-    industry = meta.get("industry_group", "")
-    sector = meta.get("sector_group", "")
-    profile = meta.get("profile", "Genel")
-
-    if industry:
-        group = df[
-            (df["industry_group"].str.casefold() == industry.casefold())
-            & (df["symbol"].str.upper() != symbol)
-        ]
-        if len(group) >= 2:
-            return (
-                group["symbol"].str.upper().drop_duplicates().head(max_peers).tolist(),
-                f"Endüstri: {industry}",
-            )
-
-    if sector:
-        group = df[
-            (df["sector_group"].str.casefold() == sector.casefold())
-            & (df["symbol"].str.upper() != symbol)
-        ]
-        if len(group) >= 3:
-            return (
-                group["symbol"].str.upper().drop_duplicates().head(max_peers).tolist(),
-                f"Sektör: {sector}",
-            )
-
-    group = df[
-        (df["profile"].str.casefold() == profile.casefold())
-        & (df["symbol"].str.upper() != symbol)
-    ]
-    return (
-        group["symbol"].str.upper().drop_duplicates().head(max_peers).tolist(),
-        f"Profil: {profile}",
-    )
-
-
-def clip(x: float) -> float:
-    return max(0.0, min(100.0, x))
-
-
-def score_low(value: float | None, good: float, bad: float) -> float | None:
-    if value is None:
-        return None
-    if value <= good:
-        return 100.0
-    if value >= bad:
-        return 0.0
-    return clip((bad - value) / (bad - good) * 100.0)
-
-
-def score_high(value: float | None, bad: float, good: float) -> float | None:
-    if value is None:
-        return None
-    if value <= bad:
-        return 0.0
-    if value >= good:
-        return 100.0
-    return clip((value - bad) / (good - bad) * 100.0)
-
-
-def metric_score(
-    value: float | None,
-    rule: tuple[str, float, float],
-) -> float | None:
-    mode, a, b = rule
-    return score_low(value, a, b) if mode == "low" else score_high(value, a, b)
-
-
-def weighted_average(items: list[tuple[float | None, float]]) -> float | None:
-    valid = [(s, w) for s, w in items if s is not None]
-    if not valid:
-        return None
-    return sum(s * w for s, w in valid) / sum(w for _, w in valid)
-
-
-def status(score: float | None) -> str:
-    if score is None:
-        return "N/A"
-    if score >= 67:
-        return "İYİ"
-    if score >= 40:
-        return "NÖTR"
-    return "ZAYIF"
-
-
-def score_company(metrics: dict[str, Any], profile: str) -> dict[str, Any]:
-    thresholds = PROFILE_THRESHOLDS.get(profile, PROFILE_THRESHOLDS["Genel"])
-    scores = {
-        key: metric_score(metrics.get(key), rule)
-        for key, rule in thresholds.items()
-    }
-
-    if profile == "Banka":
-        total = weighted_average([
-            (scores["pe"], 0.20),
-            (scores["pb"], 0.20),
-            (scores["roe"], 0.30),
-            (scores["roa"], 0.15),
-            (scores["earnings_growth"], 0.15),
-        ])
-    else:
-        total = weighted_average([
-            (scores["pe"], 0.15),
-            (scores["pb"], 0.10),
-            (scores["roe"], 0.20),
-            (scores["roa"], 0.10),
-            (scores["revenue_growth"], 0.20),
-            (scores["earnings_growth"], 0.25),
-        ])
-
-    return {
-        "metrics": scores,
-        "total": total,
-        "status": status(total),
-    }
-
-
-def median(values: list[float | None]) -> float | None:
-    vals = [
-        float(v)
-        for v in values
-        if v is not None and math.isfinite(float(v))
-    ]
-    return statistics.median(vals) if vals else None
-
-
-def relative_low(
-    current: float | None,
-    benchmark: float | None,
-) -> float | None:
-    if current is None or benchmark is None or current <= 0 or benchmark <= 0:
-        return None
-    return clip(50.0 + ((benchmark - current) / benchmark) * 50.0)
-
-
-def relative_high(
-    current: float | None,
-    benchmark: float | None,
-) -> float | None:
-    if current is None or benchmark is None:
-        return None
-    denom = max(abs(benchmark), 10.0)
-    return clip(50.0 + ((current - benchmark) / denom) * 35.0)
-
-
-def build_benchmark(
-    current: dict[str, Any],
-    peers: list[dict[str, Any]],
-) -> dict[str, Any]:
-    keys = (
-        "pe", "pb", "roe", "roa",
-        "revenue_growth", "earnings_growth",
-    )
-
-    bench = {
-        key: median([p.get(key) for p in peers])
-        for key in keys
-    }
-
-    rel = {
-        "pe": relative_low(current.get("pe"), bench["pe"]),
-        "pb": relative_low(current.get("pb"), bench["pb"]),
-        "roe": relative_high(current.get("roe"), bench["roe"]),
-        "roa": relative_high(current.get("roa"), bench["roa"]),
-        "revenue_growth": relative_high(
-            current.get("revenue_growth"),
-            bench["revenue_growth"],
-        ),
-        "earnings_growth": relative_high(
-            current.get("earnings_growth"),
-            bench["earnings_growth"],
-        ),
-    }
-
-    total = weighted_average([
-        (rel["pe"], 0.15),
-        (rel["pb"], 0.10),
-        (rel["roe"], 0.20),
-        (rel["roa"], 0.10),
-        (rel["revenue_growth"], 0.20),
-        (rel["earnings_growth"], 0.25),
-    ])
-
-    counts = {
-        key: sum(1 for p in peers if p.get(key) is not None)
-        for key in keys
-    }
-
-    return {
-        "median": bench,
-        "relative": rel,
-        "total": total,
-        "counts": counts,
-    }
-
-
-def performance(series: pd.Series, periods: int) -> float | None:
-    if series.empty or len(series) <= periods:
-        return None
-    old = float(series.iloc[-periods - 1])
-    now = float(series.iloc[-1])
-    return None if old == 0 else (now / old - 1.0) * 100.0
-
-
-def relative_performance(symbol: str) -> dict[str, float | None]:
-    stock = get_close(symbol)
-    index = get_close("XU100")
-    out: dict[str, float | None] = {}
-
-    for label, bars in (("3m", 63), ("6m", 126), ("12m", 252)):
-        sp = performance(stock, bars)
-        xp = performance(index, bars)
-        out[f"stock_{label}"] = sp
-        out[f"index_{label}"] = xp
-        out[f"alpha_{label}"] = (
-            sp - xp if sp is not None and xp is not None else None
-        )
-
+def analyze(t,p,g):
+    out={}
+    for k,(fld,label,cat,direction,kind,weight) in M.items():
+        v=fnum(t.get(fld)); app=applicable(k,p); a=abs_score(v,band(k,p)) if app else None; gs={}
+        for n in ["industry","sector","xu100","bist"]:
+            gs[n]={"median":med(g[n],k),"pct":pct(g[n],k,v) if app else None,"n":len(vals(g[n],k))}
+        out[k]={"label":label,"cat":cat,"dir":direction,"kind":kind,"w":weight,"v":v,"app":app,"abs":a,"groups":gs}
     return out
 
+def scores(a):
+    cats={c:wavg([(x["abs"],x["w"]) for x in a.values() if x["cat"]==c and x["app"]]) for c in CATS}
+    quality=wavg([(cats["Büyüme"],.25),(cats["Kârlılık"],.30),(cats["Finansal Sağlık"],.25),(cats["Nakit Kalitesi"],.20)]); val=cats["Değerleme"]
+    rel={}
+    for gn in ["industry","sector","xu100","bist"]:
+        rc={c:wavg([(x["groups"][gn]["pct"],x["w"]) for x in a.values() if x["cat"]==c and x["app"]]) for c in CATS}
+        rq=wavg([(rc["Büyüme"],.25),(rc["Kârlılık"],.30),(rc["Finansal Sağlık"],.25),(rc["Nakit Kalitesi"],.20)])
+        rel[gn]={"cats":rc,"quality":rq,"valuation":rc["Değerleme"],"overall":wavg([(rq,.7),(rc["Değerleme"],.3)])}
+    return {"cats":cats,"quality":quality,"valuation":val,"composite":wavg([(quality,.7),(val,.3)]),"rel":rel}
 
-def fmt(value: float | None, key: str = "", digits: int = 2) -> str:
-    if value is None:
-        return "N/A"
+def ref_text(k,p):
+    b=band(k,p)
+    if not b:return "Bilgi"
+    d,a,z=b; kind=M[k][4]
+    return f"Zayıf ≤ {fmt(a,kind)} · Güçlü ≥ {fmt(z,kind)}" if d=="high" else f"Güçlü ≤ {fmt(a,kind)} · Zayıf ≥ {fmt(z,kind)}"
 
-    suffix = (
-        "%"
-        if key in PCT_KEYS
-        else "x"
-        if key in {"pe", "pb", "enterprise_to_ebitda"}
-        else ""
-    )
-    return f"{value:.{digits}f}{suffix}"
+def factor_comment(x,p):
+    if x["v"] is None:return f"{x['label']}: güncel veri bulunmadığı için yorumlanmadı."
+    if not x["app"]:return f"{x['label']} {fmt(x['v'],x['kind'])}. {p} profili için ana değerlendirme kriteri değildir ve skora dahil edilmedi."
+    s=f"{x['label']} {fmt(x['v'],x['kind'])}. Mutlak değerlendirme {status(x['abs']).lower()} ({ref_text(next(k for k,v in M.items() if v[1]==x['label']),p)})."
+    pr=x["groups"]["industry"] if x["groups"]["industry"]["n"]>=4 else x["groups"]["sector"]; name="endüstri" if x["groups"]["industry"]["n"]>=4 else "sektör"
+    if pr["median"] is not None and pr["n"]>=3:s+=f" {name.capitalize()} medyanı {fmt(pr['median'],x['kind'])}; göreli konum {pr['pct']:.0f}/100."
+    q=x["groups"]["xu100"]
+    if q["median"] is not None and q["n"]>=10:s+=f" BIST100 medyanı {fmt(q['median'],x['kind'])}; göreli konum {q['pct']:.0f}/100."
+    b=x["groups"]["bist"]
+    if b["median"] is not None and b["n"]>=20:s+=f" Tüm BIST medyanı {fmt(b['median'],x['kind'])}; göreli konum {b['pct']:.0f}/100."
+    return s
 
-
-def score_color(score: float | None) -> str:
-    if score is None:
-        return "na"
-    if score >= 67:
-        return "good"
-    if score >= 40:
-        return "neutral"
-    return "bad"
-
-
-def build_comments(
-    metrics: dict[str, Any],
-    scores: dict[str, Any],
-    benchmark: dict[str, Any],
-    perf: dict[str, Any],
-) -> list[str]:
-    if scores["total"] is None:
-        comments = ["Bireysel temel skor için veri yetersiz."]
-    else:
-        comments = [
-            f"Bireysel temel skor {scores['total']:.0f}/100 "
-            f"({scores['status']})."
-        ]
-
-    for key in (
-        "pe", "pb", "roe",
-        "revenue_growth", "earnings_growth",
-    ):
-        value = metrics.get(key)
-        b = benchmark["median"].get(key)
-
-        if value is None:
-            continue
-
-        if b is None:
-            comments.append(
-                f"{METRIC_LABELS[key]} {fmt(value, key)}; "
-                "emsal medyanı için yeterli veri yok."
-            )
-            continue
-
-        if key in {"pe", "pb"}:
-            wording = "daha düşük" if value < b else "daha yüksek"
-        else:
-            wording = "üzerinde" if value > b else "altında"
-
-        comments.append(
-            f"{METRIC_LABELS[key]} {fmt(value, key)}; "
-            f"emsal medyanı {fmt(b, key)} ve şirket bu referansa göre {wording}."
-        )
-
-    alpha = perf.get("alpha_12m")
-    if alpha is not None:
-        comments.append(
-            f"Son 12 ayda BIST100'e göre relatif performans "
-            f"{alpha:+.2f} puan."
-        )
-
-    return comments
-
-
-def render_html(context: dict[str, Any]) -> str:
-    m = context["metrics"]
-    s = context["scores"]
-    b = context["benchmark"]
-    p = context["performance"]
-    meta = context["metadata"]
-
-    def esc(x: Any) -> str:
-        return html.escape(str(x))
-
-    rows = []
-    ordered_keys = (
-        "pe", "pb", "roe", "roa",
-        "revenue_growth", "earnings_growth",
-        "operating_margin", "profit_margin",
-        "debt_to_equity", "current_ratio",
-        "enterprise_to_ebitda", "fcf_yield",
-        "dividend_yield",
-    )
-
-    for key in ordered_keys:
-        value = m.get(key)
-        if value is None:
-            continue
-
-        abs_score = s["metrics"].get(key)
-        bench = b["median"].get(key)
-        rel = b["relative"].get(key)
-
-        rows.append(
-            f"<tr><td>{esc(METRIC_LABELS[key])}</td>"
-            f"<td>{esc(fmt(value, key))}</td>"
-            f"<td>{esc('N/A' if abs_score is None else f'{abs_score:.0f}/100')}</td>"
-            f"<td>{esc(fmt(bench, key) if bench is not None else 'N/A')}</td>"
-            f"<td>{esc('N/A' if rel is None else f'{rel:.0f}/100')}</td></tr>"
-        )
-
-    perf_rows = []
-    period_labels = {"3m": "3 Ay", "6m": "6 Ay", "12m": "12 Ay"}
-
-    for key in ("3m", "6m", "12m"):
-        alpha = p.get("alpha_" + key)
-        perf_rows.append(
-            "<tr>"
-            f"<td>{period_labels[key]}</td>"
-            f"<td>{fmt(p.get('stock_'+key), 'roe')}</td>"
-            f"<td>{fmt(p.get('index_'+key), 'roe')}</td>"
-            f"<td>{'N/A' if alpha is None else f'{alpha:+.2f} puan'}</td>"
-            "</tr>"
-        )
-
-    comments = "".join(
-        f"<li>{esc(item)}</li>"
-        for item in context["comments"]
-    )
-
-    peers = " · ".join(context["peer_symbols"]) or "Yeterli emsal yok"
-
-    absolute_text = (
-        "N/A"
-        if s["total"] is None
-        else f"{s['total']:.0f}/100"
-    )
-
-    relative_text = (
-        "N/A"
-        if b["total"] is None
-        else f"{b['total']:.0f}/100"
-    )
-
-    price_text = (
-        "N/A"
-        if m.get("price") is None
-        else f"{m['price']:.2f}"
-    )
-
-    alpha12 = p.get("alpha_12m")
-    alpha12_text = (
-        "N/A"
-        if alpha12 is None
-        else f"{alpha12:+.2f}"
-    )
-
-    return f"""<!doctype html>
-<html lang="tr">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{esc(context['symbol'])} — BIST Fundamental Intelligence</title>
-<style>
-body{{font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3;margin:0}}
-.wrap{{max-width:1180px;margin:auto;padding:28px}}
-.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:18px 0}}
-.card,table{{background:#161b22;border:1px solid #30363d;border-radius:10px}}
-.card{{padding:16px}}
-.big{{font-size:30px;font-weight:700}}
-.muted{{color:#8b949e}}
-.good{{color:#3fb950}}
-.neutral{{color:#d29922}}
-.bad{{color:#f85149}}
-.na{{color:#8b949e}}
-table{{width:100%;border-collapse:collapse;margin:12px 0 24px;overflow:hidden}}
-th,td{{border:1px solid #30363d;padding:9px;text-align:right}}
-th:first-child,td:first-child{{text-align:left}}
-th{{background:#21262d}}
-li{{margin:8px 0}}
-.note{{border-left:4px solid #d29922;padding:12px;background:#161b22}}
-</style>
-</head>
-<body>
-<div class="wrap">
-
-<h1>{esc(context['symbol'])} — Fundamental Intelligence Report</h1>
-<div class="muted">
-{esc(m.get('name',''))} · Profil: {esc(meta.get('profile','Genel'))}
-· {esc(context['benchmark_scope'])}
-</div>
-
-<div class="grid">
-<div class="card">
-<div class="muted">Bireysel Temel Skor</div>
-<div class="big {score_color(s['total'])}">{absolute_text}</div>
-<div>{esc(s['status'])}</div>
-</div>
-
-<div class="card">
-<div class="muted">Emsal Relatif Skor</div>
-<div class="big {score_color(b['total'])}">{relative_text}</div>
-<div>n={len(context['peer_data'])}</div>
-</div>
-
-<div class="card">
-<div class="muted">Fiyat</div>
-<div class="big">{esc(price_text)}</div>
-<div>{esc(m.get('currency','TRY'))}</div>
-</div>
-
-<div class="card">
-<div class="muted">12A XU100 Alfa</div>
-<div class="big">{esc(alpha12_text)}</div>
-<div>puan</div>
-</div>
-</div>
-
-<h2>Finansal Faktörler</h2>
-<table>
-<tr>
-<th>Metrik</th>
-<th>Şirket</th>
-<th>Mutlak Puan</th>
-<th>Emsal Medyanı</th>
-<th>Relatif Puan</th>
-</tr>
-{''.join(rows)}
-</table>
-
-<h2>BIST100 Relatif Performans</h2>
-<table>
-<tr>
-<th>Dönem</th>
-<th>{esc(context['symbol'])}</th>
-<th>XU100</th>
-<th>Alfa</th>
-</tr>
-{''.join(perf_rows)}
-</table>
-
-<h2>Otomatik Yorum</h2>
-<ul>{comments}</ul>
-
-<h2>Emsal Evreni</h2>
-<div class="card">{esc(peers)}</div>
-
-<p class="note">
-MVP v0.1. Yahoo Finance verileri BIST için eksik/gecikmeli olabilir.
-Eksik değerler uydurulmaz. Bu rapor araştırma amaçlıdır; yatırım tavsiyesi değildir.
-</p>
-
-</div>
-</body>
-</html>"""
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="BIST Fundamental Intelligence"
-    )
-    parser.add_argument("symbol", help="Örn: ASELS")
-    args = parser.parse_args()
-
-    symbol = args.symbol.strip().upper().replace(".IS", "")
-    if not symbol:
-        raise SystemExit("Hisse kodu boş olamaz.")
-
-    print(f"[1/6] {symbol} ana verileri alınıyor...")
-    universe = load_universe()
-    meta = metadata_for(universe, symbol)
-    metrics = get_info(symbol)
-    scores = score_company(
-        metrics,
-        meta.get("profile", "Genel"),
-    )
-
-    print("[2/6] Emsal evreni belirleniyor...")
-    peer_symbols, scope = choose_peers(
-        universe,
-        symbol,
-        meta,
-    )
-
-    peer_data = []
-    for peer in peer_symbols:
+def index_perf():
+    for s in ["XU100.IS","^XU100"]:
         try:
-            peer_data.append(get_info(peer))
-        except Exception as exc:
-            print(f"  Uyarı: {peer} alınamadı: {exc}")
+            d=yf.download(s,period="2y",interval="1d",auto_adjust=False,progress=False,threads=False)
+            if not d.empty:
+                c=d["Close"]; c=c.iloc[:,0] if isinstance(c,pd.DataFrame) else c; c=c.dropna().astype(float)
+                def p(n):return (float(c.iloc[-1])/float(c.iloc[-n-1])-1)*100 if len(c)>n else None
+                return {"3m":p(63),"6m":p(126),"12m":p(252)}
+        except: pass
+    return {"3m":None,"6m":None,"12m":None}
 
-    print("[3/6] Sektör/endüstri medyanları hesaplanıyor...")
-    benchmark = build_benchmark(metrics, peer_data)
+def overall(t,p,s,perf):
+    c=s["cats"]; words=[f"{t['symbol']} için temel kalite skoru {fmt(s['quality'])}/100, değerleme skoru {fmt(s['valuation'])}/100 ve bileşik temel skor {fmt(s['composite'])}/100 düzeyindedir."]
+    good=sorted([(k,v) for k,v in c.items() if k!="Değerleme" and v is not None and v>=65],key=lambda z:z[1],reverse=True)[:2]; bad=sorted([(k,v) for k,v in c.items() if k!="Değerleme" and v is not None and v<45],key=lambda z:z[1])[:2]
+    if good:words.append("Öne çıkan güçlü alanlar "+" ve ".join(f"{k.lower()} ({v:.0f}/100)" for k,v in good)+".")
+    if bad:words.append("Görece zayıf alanlar "+" ve ".join(f"{k.lower()} ({v:.0f}/100)" for k,v in bad)+".")
+    if s["valuation"] is not None:words.append("Değerleme tarafı ucuz değil ve risk ayrıca izlenmeli." if s["valuation"]<35 else "Değerleme şirket kalitesini destekliyor." if s["valuation"]>=65 else "Değerleme dengeli; kaliteyle birlikte okunmalı.")
+    rs=s["rel"]["sector"]["overall"]; rx=s["rel"]["xu100"]["overall"]; rb=s["rel"]["bist"]["overall"]
+    if rs is not None:words.append(f"Tüm sektör şirketlerine göre göreli temel skor {rs:.0f}/100.")
+    if rx is not None:words.append(f"BIST100 temel dağılımına göre {rx:.0f}/100, tüm BIST'e göre {rb:.0f}/100 seviyesinde.")
+    sp=fnum(t.get("Perf.Y")); xp=perf["12m"]
+    if sp is not None and xp is not None:words.append(f"Son 12 ay fiyat performansı BIST100'e göre {sp-xp:+.2f} puan relatif fark taşıyor.")
+    if p in {"GYO","Holding"}:words.append("PD/DD gerçek NAD iskontosu olarak kabul edilmez; NAD ayrıca sağlanmadıkça bu ayrım korunur.")
+    return " ".join(words)
 
-    print("[4/6] BIST100 relatif performansı hesaplanıyor...")
-    perf = relative_performance(symbol)
+def scoretxt(v):
+    return "N/A" if v is None else f"{v:.0f}/100"
 
-    print("[5/6] Otomatik yorum hazırlanıyor...")
-    comments = build_comments(
-        metrics,
-        scores,
-        benchmark,
-        perf,
-    )
+def html_report(t,p,a,s,g,xset,perf,comments,gen):
+    e=lambda z:html.escape(str(z)); cards=[]
+    for n,v in [("Temel Kalite",s["quality"]),("Değerleme",s["valuation"]),("Bileşik",s["composite"]),("Sektör Relatif",s["rel"]["sector"]["overall"]),("BIST100 Relatif",s["rel"]["xu100"]["overall"]),("Tüm BIST Relatif",s["rel"]["bist"]["overall"])]:
+        cards.append(f'<div class="card"><small>{e(n)}</small><b>{e(scoretxt(v))}</b><span>{e(status(v))}</span></div>')
+    rows=[]; blocks=[]
+    for k,x in a.items():
+        if x["v"] is None:continue
+        G=x["groups"]
+        def grp(n):
+            q=G[n]
+            return f"{e(fmt(q['median'],x['kind']))}<small>n={q['n']} · {e(scoretxt(q['pct']))}</small>"
+        rows.append(
+            f"<tr><td>{e(x['label'])}</td><td>{e(fmt(x['v'],x['kind']))}</td>"
+            f"<td>{e(status(x['abs']) if x['app'] else 'Uygulanmaz')}</td>"
+            f"<td>{grp('industry')}</td><td>{grp('sector')}</td><td>{grp('xu100')}</td><td>{grp('bist')}</td></tr>"
+        )
+        blocks.append(f"<section><h3>{e(x['label'])} — {e(fmt(x['v'],x['kind']))}</h3><p>{e(comments[k])}</p></section>")
+    cr=[]
+    for c in CATS:
+        cr.append(
+            f"<tr><td>{e(c)}</td><td>{e(scoretxt(s['cats'][c]))}</td>"
+            f"<td>{e(scoretxt(s['rel']['sector']['cats'][c]))}</td>"
+            f"<td>{e(scoretxt(s['rel']['xu100']['cats'][c]))}</td>"
+            f"<td>{e(scoretxt(s['rel']['bist']['cats'][c]))}</td></tr>"
+        )
+    pr=[]
+    for k,n in [("3m","3 Ay"),("6m","6 Ay"),("12m","12 Ay")]:
+        sp=fnum(t.get({"3m":"Perf.3M","6m":"Perf.6M","12m":"Perf.Y"}[k])); xp=perf[k]; al=sp-xp if sp is not None and xp is not None else None
+        pr.append(f"<tr><td>{n}</td><td>{fmt(sp,'%')}</td><td>{fmt(xp,'%')}</td><td>{'N/A' if al is None else f'{al:+.2f} puan'}</td></tr>")
+    sec=str(t.get('sector') or 'N/A'); ind=str(t.get('industry') or 'N/A'); name=str(t.get('description') or t.get('name') or t['symbol'])
+    return f'''<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(t['symbol'])} — BIST Fundamental Intelligence</title><style>body{{font-family:Arial;background:#0d1117;color:#e6edf3;margin:0;line-height:1.5}}main{{max-width:1500px;margin:auto;padding:28px}}small{{display:block;color:#8b949e}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}.card,section,.note{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px}}.card b{{display:block;font-size:26px}}.table{{overflow:auto;margin:18px 0}}table{{width:100%;min-width:1100px;border-collapse:collapse;background:#161b22}}th,td{{padding:9px;border:1px solid #30363d;text-align:right;vertical-align:top}}th:first-child,td:first-child{{text-align:left}}th{{background:#21262d}}section{{margin:10px 0}}section h3{{margin:0 0 6px;font-size:16px}}section p{{margin:0}}.note{{border-left:4px solid #d29922}}.expert{{border-left-color:#3fb950}}</style></head><body><main><h1>{e(t['symbol'])} — Fundamental Intelligence Report</h1><p>{e(name)} · Profil: {e(p)} · Sektör: {e(sec)} · Endüstri: {e(ind)} · {e(gen)}</p><div class="grid">{''.join(cards)}</div><h2>Profesyonel Genel Değerlendirme</h2><div class="note expert">{e(overall(t,p,s,perf))}</div><h2>Kategori Özeti</h2><div class="table"><table><tr><th>Kategori</th><th>Mutlak</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(cr)}</table></div><h2>Tüm Finansal Faktörler</h2><div class="note">Karşılaştırma sabit emsal sayısıyla değil, güncel tam BIST evreninden otomatik sektör/endüstri, BIST100 ve tüm BIST dağılımlarıyla yapılır. 100 puan göreli olarak daha avantajlı konumu gösterir.</div><div class="table"><table><tr><th>Metrik</th><th>{e(t['symbol'])}</th><th>Mutlak</th><th>Endüstri</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(rows)}</table></div><h2>Faktör Bazlı Uzman Yorumları</h2>{''.join(blocks)}<h2>BIST100 Fiyat Relatif Performansı</h2><div class="table"><table><tr><th>Dönem</th><th>{e(t['symbol'])}</th><th>XU100</th><th>Alfa</th></tr>{''.join(pr)}</table></div><h2>Kapsam</h2><div class="grid"><div class="card"><small>Tüm BIST</small><b>{len(g['all'])}</b></div><div class="card"><small>Sektör</small><b>{len(g['sector'])}</b><span>{e(sec)}</span></div><div class="card"><small>Endüstri</small><b>{len(g['industry'])}</b><span>{e(ind)}</span></div><div class="card"><small>BIST100 üyeleri</small><b>{len(xset) if xset else 'N/A'}</b></div></div><p class="note">Eksik veri uydurulmaz. Mutlak referans bantları evrensel kesinlik değil, finansal oran mantığı + profil kalibrasyonudur. GYO/Holding için PD/DD gerçek NAD iskontosu değildir. Araştırma amaçlıdır; yatırım tavsiyesi değildir.</p></main></body></html>'''
 
-    context = {
-        "symbol": symbol,
-        "metadata": meta,
-        "metrics": metrics,
-        "scores": scores,
-        "peer_symbols": peer_symbols,
-        "peer_data": peer_data,
-        "benchmark_scope": scope,
-        "benchmark": benchmark,
-        "performance": perf,
-        "comments": comments,
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
-    }
+def safe(v):
+    if isinstance(v,dict):return {str(k):safe(x) for k,x in v.items()}
+    if isinstance(v,list):return [safe(x) for x in v]
+    if isinstance(v,set):return sorted(v)
+    if isinstance(v,pd.Series):return safe(v.to_dict())
+    if isinstance(v,(str,int,float,bool)) or v is None:return v
+    return None if pd.isna(v) else str(v)
 
-    REPORT_DIR.mkdir(exist_ok=True)
+def main():
+    ap=argparse.ArgumentParser(); ap.add_argument("symbol"); a=ap.parse_args(); sym=a.symbol.upper().replace("BIST:","").replace(".IS","").strip()
+    print("[1/7] Tüm BIST evreni alınıyor..."); u=universe(); h=u[u.symbol==sym]
+    if h.empty:raise SystemExit(f"{sym} bulunamadı")
+    t=h.iloc[0].copy(); t["symbol"]=sym; p=profile(t)
+    print("[2/7] BIST100 üyeleri alınıyor..."); xs=xu100(u)
+    print("[3/7] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs); an=analyze(t,p,g); sc=scores(an)
+    print("[4/7] Her faktör yorumlanıyor..."); cm={k:factor_comment(v,p) for k,v in an.items()}
+    print("[5/7] XU100 performansı..."); ip=index_perf()
+    print("[6/7] Rapor hazırlanıyor..."); gen=datetime.now().isoformat(timespec="seconds"); REPORTS.mkdir(exist_ok=True)
+    hp=REPORTS/f"{sym}_report.html"; jp=REPORTS/f"{sym}_report.json"; cp=REPORTS/f"{sym}_universe_snapshot.csv"
+    hp.write_text(html_report(t,p,an,sc,g,xs,ip,cm,gen),encoding="utf-8")
+    jp.write_text(json.dumps(safe({"symbol":sym,"target":t,"profile":p,"metrics":an,"scores":sc,"xu100_count":len(xs),"index_performance":ip,"comments":cm,"overall":overall(t,p,sc,ip),"generated_at":gen}),ensure_ascii=False,indent=2),encoding="utf-8")
+    g["all"].to_csv(cp,index=False,encoding="utf-8-sig")
+    print(f"[7/7] Hazır: BIST={len(g['all'])}, sektör={len(g['sector'])}, endüstri={len(g['industry'])}, XU100={len(xs) if xs else 'N/A'}")
+    print(hp); print(jp); print(cp)
 
-    html_path = REPORT_DIR / f"{symbol}_report.html"
-    json_path = REPORT_DIR / f"{symbol}_report.json"
-
-    html_path.write_text(
-        render_html(context),
-        encoding="utf-8",
-    )
-    json_path.write_text(
-        json.dumps(
-            context,
-            ensure_ascii=False,
-            indent=2,
-            default=str,
-        ),
-        encoding="utf-8",
-    )
-
-    print("[6/6] Rapor hazır.")
-    print(f"HTML: {html_path}")
-    print(f"JSON: {json_path}")
-
-
-if __name__ == "__main__":
-    main()
+if __name__=="__main__":main()
