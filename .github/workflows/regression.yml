@@ -7,6 +7,7 @@ on:
     paths:
       - "analyze.py"
       - "history_engine.py"
+      - "regression_checks.py"
       - "requirements.txt"
       - ".github/workflows/regression.yml"
   workflow_dispatch:
@@ -40,6 +41,9 @@ jobs:
 
       - name: EKGYO GYO/NAD testi
         run: python analyze.py EKGYO
+
+      - name: Semantik rapor kontrolleri
+        run: python regression_checks.py
 
       - name: Regresyon raporlarını yükle
         uses: actions/upload-artifact@v4
