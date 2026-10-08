@@ -122,6 +122,26 @@ def audit_symbol(row, universe_df, xu100_set, qn):
             elif bop is not None and bop==1:
                 add_issue(issues,"INFO","BANK_OPERATING_ROW_COVERAGE","loan/deposit detail rows 1/2")
 
+        sp=hist.get("special_profile_analysis",{})
+        if profile=="Sigorta":
+            if sp.get("status")!="INSURANCE_ENGINE":
+                add_issue(issues,"CRITICAL","SPECIAL_PROFILE_ENGINE","Sigorta özel motoru çalışmadı")
+            else:
+                sm=sp.get("metrics",{})
+                if sm.get("net_written_premium") is None:
+                    add_issue(issues,"WARNING","INSURANCE_PREMIUM_MISSING","Net yazılan prim bulunamadı")
+                if sm.get("technical_balance") is None:
+                    add_issue(issues,"WARNING","INSURANCE_TECHNICAL_MISSING","Teknik denge bulunamadı")
+        elif profile=="Finansal":
+            if sp.get("status")!="FINANCIAL_ENGINE":
+                add_issue(issues,"CRITICAL","SPECIAL_PROFILE_ENGINE","Finansal özel motor çalışmadı")
+        elif profile in {"GYO","Holding","Yatırım Ortaklığı"}:
+            if sp.get("status") not in {"NAV_REQUIRED","NAV_AVAILABLE"}:
+                add_issue(issues,"CRITICAL","NAV_GATE_MISSING",f"{profile} için NAD kapısı oluşmadı")
+        elif profile=="Banka":
+            if sp.get("status")!="BANK_ENGINE":
+                add_issue(issues,"CRITICAL","SPECIAL_PROFILE_ENGINE","Banka özel motoru çalışmadı")
+
         hs=hist.get("summary",{})
         equity=hs.get("equity")
         if finite(equity) and float(equity) <= 0:
