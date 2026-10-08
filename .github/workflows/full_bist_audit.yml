@@ -1,0 +1,73 @@
+name: Full BIST Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "audit_all.py"
+      - "audit_merge.py"
+      - ".github/workflows/full_bist_audit.yml"
+
+concurrency:
+  group: full-bist-audit-main
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Shard ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3,4,5,6,7]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Bağımlılıkları kur
+        run: pip install -r requirements.txt
+      - name: Sözdizimi kontrolü
+        run: python -m py_compile analyze.py history_engine.py audit_all.py audit_merge.py
+      - name: Tüm BIST shard audit
+        run: python audit_all.py --shard-index ${{ matrix.shard }} --shard-count 8 --quarterly 8
+      - name: Shard sonucunu yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: bist-audit-shard-${{ matrix.shard }}
+          path: audit_results/*
+          if-no-files-found: error
+          retention-days: 7
+
+  merge:
+    needs: audit
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Merge bağımlılıkları
+        run: pip install pandas>=2.2
+      - name: Shard artifactlarını indir
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bist-audit-shard-*
+          path: audit_downloads
+          merge-multiple: false
+      - name: Sonuçları birleştir
+        run: python audit_merge.py
+      - name: Full audit raporunu yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-bist-audit
+          path: audit_summary/*
+          if-no-files-found: error
+          retention-days: 14
