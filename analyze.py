@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse, html, json, math, re, statistics
+from functools import lru_cache
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -92,21 +93,33 @@ def status(s):
     if s is None:return "N/A"
     return "Çok güçlü" if s>=75 else "Güçlü" if s>=60 else "Dengeli" if s>=45 else "Zayıf" if s>=30 else "Çok zayıf"
 
+@lru_cache(maxsize=16)
+def _official_members(code):
+    try:
+        return frozenset(str(x).upper() for x in bp.Index(code).component_symbols)
+    except Exception:
+        return frozenset()
+
+
 def profile(r):
     sec=str(r.get("sector") or "").casefold()
     ind=str(r.get("industry") or "").casefold()
     d=str(r.get("description") or r.get("name") or "").casefold()
+    sym=str(r.get("symbol") or r.get("ticker") or "").split(":")[-1].upper()
 
-    # Company-name semantics override broad provider buckets. For example,
-    # brokers sit under "Investment Banks/Brokers" and SAHOL may appear under
-    # "Regional Banks"; a raw "bank" substring therefore creates false banks.
+    # Official BIST index membership has priority over provider sector labels.
+    # This is particularly important for holdings and brokers, where consolidated
+    # businesses can cause generic data vendors to assign misleading industries.
+    if sym:
+        if sym in _official_members("XGMYO"):return "GYO"
+        if sym in _official_members("XBANK"):return "Banka"
+        if sym in _official_members("XSGRT"):return "Sigorta"
+        if sym in _official_members("XYORT"):return "Yatırım Ortaklığı"
+        if sym in _official_members("XHOLD"):return "Holding"
+
+    # Semantic fallback if index membership is temporarily unavailable.
     if "gayrimenkul yatirim ortakligi" in d or "gayrimenkul yatırım ortaklığı" in d:
         return "GYO"
-    if "holding" in d:
-        return "Holding"
-    if "real estate investment trust" in ind or ind.strip()=="reit":
-        return "GYO"
-
     if "insurance" in ind or "sigorta" in d or "hayat ve emeklilik" in d:
         return "Sigorta"
 
@@ -119,6 +132,16 @@ def profile(r):
 
     if "yatirim ortakligi" in d or "yatırım ortaklığı" in d:
         return "Yatırım Ortaklığı"
+
+    # Only use the word Holding as fallback when the data-vendor classification
+    # also points to a financial/conglomerate structure. This avoids classifying
+    # operating names such as TAV/Petkim/Deva as investment holdings.
+    if "holding" in d and (
+        sec=="finance"
+        or ind in {"financial conglomerates","investment managers","investment banks/brokers"}
+        or "conglomerate" in ind
+    ):
+        return "Holding"
 
     financial_name=any(x in d for x in [
         "menkul deger", "menkul değer", "faktoring", "finansal kiralama",
