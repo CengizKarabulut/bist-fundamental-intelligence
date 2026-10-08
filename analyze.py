@@ -1162,6 +1162,29 @@ def history_html(history):
             '<th>Net Kâr YoY</th><th>Faaliyet Marjı</th><th>Net Marj</th><th>Çeyreklik OCF</th></tr>'
         )
 
+    annual_history_rows=[]
+    for r in h.get("annual_self_history",[]) or []:
+        annual_history_rows.append(
+            "<tr>"
+            f"<td>{e(r.get('year',''))}</td>"
+            f"<td>{e(_hist_money(r.get('revenue')))}</td>"
+            f"<td>{e(_hist_money(r.get('net_income')))}</td>"
+            f"<td>{e(_hist_num(r.get('net_margin'),'%'))}</td>"
+            f"<td>{e(_hist_num(r.get('roe_proxy'),'%'))}</td>"
+            f"<td>{e(_hist_num(r.get('roa_proxy'),'%'))}</td>"
+            f"<td>{e(_hist_money(r.get('equity')))}</td>"
+            "</tr>"
+        )
+    annual_history_html=(
+        '<h3>Şirketin Kendi Yıllık Eğilimi</h3>'
+        '<div class="note">ROE/ROA tarihsel oranları dönem sonu özkaynak/aktif kullanılarak yaklaşık hesaplanır; '
+        'sektör karşılaştırma skorundan ayrı tutulur.</div>'
+        '<div class="table"><table><tr><th>Yıl</th><th>Ciro</th><th>Net Kâr</th>'
+        '<th>Net Marj</th><th>ROE Yaklaşık</th><th>ROA Yaklaşık</th><th>Özkaynak</th></tr>'
+        +''.join(annual_history_rows)+'</table></div>'
+        if annual_history_rows else ""
+    )
+
     def list_html(items,cls):
         if not items:return ""
         return f'<div class="note {cls}"><ul>'+"".join(f"<li>{e(x)}</li>" for x in items)+"</ul></div>"
@@ -1184,6 +1207,7 @@ def history_html(history):
         +list_html(comm.get("watch",[]),"")
         +'</div>'
         '<div class="table"><table>'+header+''.join(rows)+'</table></div>'
+        +annual_history_html
     )
 
 def html_report(t,p,a,s,g,xset,perf,comments,gen,history=None,validation=None,sector_code=None,sector_perf=None):
