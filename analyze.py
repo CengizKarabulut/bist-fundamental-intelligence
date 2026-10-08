@@ -188,21 +188,79 @@ def groups(u,t,xset):
 def analyze(t,p,g):
     out={}
     for k,(fld,label,cat,direction,kind,weight) in M.items():
-        v=fnum(t.get(fld)); app=applicable(k,p); a=abs_score(v,band(k,p)) if app else None; gs={}
+        v=fnum(t.get(fld))
+        app=applicable(k,p)
+        scr=scoreable(k,p)
+        a=abs_score(v,band(k,p)) if scr else None
+        gs={}
         for n in ["industry","sector","xu100","bist"]:
             gs[n]={"median":med(g[n],k),"pct":pct(g[n],k,v) if app else None,"n":len(vals(g[n],k))}
-        out[k]={"label":label,"cat":cat,"dir":direction,"kind":kind,"w":weight,"v":v,"app":app,"abs":a,"groups":gs}
+        out[k]={
+            "label":label,"cat":cat,"dir":direction,"kind":kind,"w":weight,
+            "v":v,"raw_v":v,"source":"TradingView","app":app,"scoreable":scr,
+            "abs":a,"groups":gs
+        }
     return out
 
+def apply_profile_primary_source(a,p,history,g):
+    """Use profile-appropriate primary data for the selected stock.
+
+    For GYOs, İş Yatırım's realised company-card valuation fields take priority.
+    An explicit A/D (None) is preserved instead of silently falling back to a
+    TradingView ratio that İş Yatırım considers economically meaningless.
+    Cross-sectional medians remain TradingView and are therefore descriptive only
+    for these mixed-source GYO valuation fields.
+    """
+    if p!="GYO" or not history or history.get("error") or history.get("metadata_warning"):
+        return a
+
+    market=history.get("market",{})
+    mapping={"pe":"pe","pb":"pb","ev":"ev_ebitda","div":"dividend_yield"}
+    for k,mkey in mapping.items():
+        if k not in a or mkey not in market:
+            continue
+        provider=fnum(market.get(mkey))
+        x=a[k]
+        x["v"]=provider
+        x["source"]="İş Yatırım" if provider is not None else "İş Yatırım (A/D)"
+        x["scoreable"]=scoreable(k,p)
+        x["abs"]=abs_score(provider,band(k,p)) if x["scoreable"] and provider is not None else None
+        for gn in ["industry","sector","xu100","bist"]:
+            x["groups"][gn]["pct"]=pct(g[gn],k,provider) if provider is not None and x["app"] else None
+    return a
+
 def scores(a):
-    cats={c:wavg([(x["abs"],x["w"]) for x in a.values() if x["cat"]==c and x["app"]]) for c in CATS}
-    quality=wavg([(cats["Büyüme"],.25),(cats["Kârlılık"],.30),(cats["Finansal Sağlık"],.25),(cats["Nakit Kalitesi"],.20)]); val=cats["Değerleme"]
+    cats={
+        c:wavg([(x["abs"],x["w"]) for x in a.values() if x["cat"]==c and x.get("scoreable",x["app"])])
+        for c in CATS
+    }
+    quality=wavg([
+        (cats["Büyüme"],.25),(cats["Kârlılık"],.30),
+        (cats["Finansal Sağlık"],.25),(cats["Nakit Kalitesi"],.20)
+    ])
+    val=cats["Değerleme"]
     rel={}
     for gn in ["industry","sector","xu100","bist"]:
-        rc={c:wavg([(x["groups"][gn]["pct"],x["w"]) for x in a.values() if x["cat"]==c and x["app"]]) for c in CATS}
-        rq=wavg([(rc["Büyüme"],.25),(rc["Kârlılık"],.30),(rc["Finansal Sağlık"],.25),(rc["Nakit Kalitesi"],.20)])
-        rel[gn]={"cats":rc,"quality":rq,"valuation":rc["Değerleme"],"overall":wavg([(rq,.7),(rc["Değerleme"],.3)])}
-    return {"cats":cats,"quality":quality,"valuation":val,"composite":wavg([(quality,.7),(val,.3)]),"rel":rel}
+        rc={
+            c:wavg([
+                (x["groups"][gn]["pct"],x["w"])
+                for x in a.values()
+                if x["cat"]==c and x.get("scoreable",x["app"])
+            ])
+            for c in CATS
+        }
+        rq=wavg([
+            (rc["Büyüme"],.25),(rc["Kârlılık"],.30),
+            (rc["Finansal Sağlık"],.25),(rc["Nakit Kalitesi"],.20)
+        ])
+        rel[gn]={
+            "cats":rc,"quality":rq,"valuation":rc["Değerleme"],
+            "overall":wavg([(rq,.7),(rc["Değerleme"],.3)])
+        }
+    return {
+        "cats":cats,"quality":quality,"valuation":val,
+        "composite":wavg([(quality,.7),(val,.3)]),"rel":rel
+    }
 
 def ref_text(k,p):
     b=band(k,p)
@@ -211,15 +269,51 @@ def ref_text(k,p):
     return f"Zayıf ≤ {fmt(a,kind)} · Güçlü ≥ {fmt(z,kind)}" if d=="high" else f"Güçlü ≤ {fmt(a,kind)} · Zayıf ≥ {fmt(z,kind)}"
 
 def factor_comment(x,p):
-    if x["v"] is None:return f"{x['label']}: güncel veri bulunmadığı için yorumlanmadı."
-    if not x["app"]:return f"{x['label']} {fmt(x['v'],x['kind'])}. {p} profili için ana değerlendirme kriteri değildir ve skora dahil edilmedi."
-    s=f"{x['label']} {fmt(x['v'],x['kind'])}. Mutlak değerlendirme {status(x['abs']).lower()} ({ref_text(next(k for k,v in M.items() if v[1]==x['label']),p)})."
-    pr=x["groups"]["industry"] if x["groups"]["industry"]["n"]>=4 else x["groups"]["sector"]; name="endüstri" if x["groups"]["industry"]["n"]>=4 else "sektör"
-    if pr["median"] is not None and pr["n"]>=3:s+=f" {name.capitalize()} medyanı {fmt(pr['median'],x['kind'])}; göreli konum {pr['pct']:.0f}/100."
+    source=x.get("source","TradingView")
+    raw=x.get("raw_v")
+
+    if x["v"] is None:
+        if p=="GYO" and "A/D" in source:
+            raw_text=fmt(raw,x["kind"]) if raw is not None else "N/A"
+            return (
+                f"{x['label']}: İş Yatırım gerçekleşen oranı A/D (anlamsız/değerlendirilemez) olarak gösteriyor. "
+                f"TradingView ham değeri {raw_text} olsa da GYO analizinde bu değer skorlanmadı. "
+                "NAD/PD-NAD ve varlık kalitesi önceliklidir."
+            )
+        return f"{x['label']}: güncel veri bulunmadığı için yorumlanmadı."
+
+    if not x["app"]:
+        return (
+            f"{x['label']} {fmt(x['v'],x['kind'])}. {p} profili için ana değerlendirme "
+            "kriteri değildir ve skora dahil edilmedi."
+        )
+
+    pr=x["groups"]["industry"] if x["groups"]["industry"]["n"]>=4 else x["groups"]["sector"]
+    name="endüstri" if x["groups"]["industry"]["n"]>=4 else "sektör"
+
+    if not x.get("scoreable",True):
+        s=(
+            f"{x['label']} {fmt(x['v'],x['kind'])} ({source}). Bu oran GYO profilinde "
+            "karşılaştırmalı bilgi olarak gösterilir ancak ana skora dahil edilmez."
+        )
+        if p=="GYO" and x["cat"]=="Değerleme":
+            s+=" GYO değerlemesinde gerçek NAD/PD-NAD, portföy ekspertiz değerleri ve proje yapısı daha belirleyicidir."
+        if pr["median"] is not None and pr["n"]>=3 and pr["pct"] is not None:
+            s+=f" TradingView {name} medyanı {fmt(pr['median'],x['kind'])}; göreli konum {pr['pct']:.0f}/100."
+        return s
+
+    s=(
+        f"{x['label']} {fmt(x['v'],x['kind'])}. Mutlak değerlendirme "
+        f"{status(x['abs']).lower()} ({ref_text(next(k for k,v in M.items() if v[1]==x['label']),p)})."
+    )
+    if pr["median"] is not None and pr["n"]>=3:
+        s+=f" {name.capitalize()} medyanı {fmt(pr['median'],x['kind'])}; göreli konum {pr['pct']:.0f}/100."
     q=x["groups"]["xu100"]
-    if q["median"] is not None and q["n"]>=10:s+=f" BIST100 medyanı {fmt(q['median'],x['kind'])}; göreli konum {q['pct']:.0f}/100."
+    if q["median"] is not None and q["n"]>=10:
+        s+=f" BIST100 medyanı {fmt(q['median'],x['kind'])}; göreli konum {q['pct']:.0f}/100."
     b=x["groups"]["bist"]
-    if b["median"] is not None and b["n"]>=20:s+=f" Tüm BIST medyanı {fmt(b['median'],x['kind'])}; göreli konum {b['pct']:.0f}/100."
+    if b["median"] is not None and b["n"]>=20:
+        s+=f" Tüm BIST medyanı {fmt(b['median'],x['kind'])}; göreli konum {b['pct']:.0f}/100."
     return s
 
 def index_perf():
