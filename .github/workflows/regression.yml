@@ -49,13 +49,17 @@ jobs:
       - name: AGESA sigorta/UFRS testi
         run: python analyze.py AGESA
 
-      - name: ISFIN banka dışı finans/UFRS testi
+      - name: GLBMD desteklenen finansal/UFRS testi
+        run: python analyze.py GLBMD
+
+      - name: ISFIN veri-yoksa graceful fallback testi
         run: python analyze.py ISFIN
 
       - name: Semantik rapor kontrolleri
         run: python regression_checks.py
 
       - name: Regresyon raporlarını yükle
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: regression-reports
