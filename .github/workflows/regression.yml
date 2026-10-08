@@ -38,6 +38,9 @@ jobs:
       - name: AKBNK banka/UFRS testi
         run: python analyze.py AKBNK
 
+      - name: EKGYO GYO/NAD testi
+        run: python analyze.py EKGYO
+
       - name: Regresyon raporlarını yükle
         uses: actions/upload-artifact@v4
         with:
