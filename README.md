@@ -1,162 +1,156 @@
 # BIST Fundamental Intelligence
 
-BIST hisseleri için tam evrenli temel analiz, sektör/endüstri karşılaştırması ve profesyonel raporlama motoru.
+BIST Fundamental Intelligence v1.0 RC; bir BIST sembolünü alıp güncel piyasa/temel verileri, tarihsel mali tabloları, sektör/endüstri dağılımlarını, BIST100 karşılaştırmasını ve şirket tipine özel finansal kuralları tek bir profesyonel HTML/JSON raporunda birleştiren araştırma motorudur.
 
-## v0.3 — Full Universe + Historical Financial Intelligence
+Amaç tek bir AL/SAT puanı üretmek değildir. Şirket kalitesi, büyüme, kârlılık, finansal sağlık, nakit kalitesi, değerleme ve göreli konum ayrı tutulur.
 
-Bir hisse kodu verildiğinde sistem artık sabit sayıda "emsal" seçmez. Her çalışmada güncel BIST pay evrenini dinamik olarak çeker ve seçilen hisseyi dört ayrı dağılım içinde değerlendirir:
+## Kullanım
 
-- Aynı **endüstrinin tamamı**
-- Aynı **sektörün tamamı**
-- Güncel **BIST100 üyelerinin tamamı**
-- Veri bulunan **tüm BIST pay evreni**
+GitHub üzerinde Actions → Hisse Analizi → Run workflow yolunu açın ve symbol alanına örneğin ASELS, AKBNK, EKGYO veya KCHOL yazın. Çalışma bittiğinde bist-report-SEMBOL artifact'ını indirin ve SEMBOL_report.html dosyasını açın.
 
-Karşılaştırmalarda aynı şirketin farklı pay sınıflarının dağılımı yapay biçimde bozmasını azaltmak için şirket bazlı tekilleştirme uygulanır. Eksik finansal veri sıfır kabul edilmez; ilgili metrik örnekleminden çıkarılır ve raporda gerçek \`n=\` sayısı gösterilir.
+Yerel kullanım:
 
-## Analiz katmanları
+    pip install -r requirements.txt
+    python analyze.py ASELS
 
-Her finansal faktör için raporda aynı anda şunlar gösterilir:
+Windows'ta HISSE_ANALIZ.bat da kullanılabilir.
 
-1. Şirketin güncel değeri
-2. Profil bazlı mutlak değerlendirme
-3. Endüstri medyanı ve yüzdelik/göreli konum
-4. Sektör medyanı ve yüzdelik/göreli konum
-5. BIST100 medyanı ve yüzdelik/göreli konum
-6. Tüm BIST medyanı ve yüzdelik/göreli konum
-7. Faktöre özel profesyonel Türkçe yorum
+## Veri otoritesi
 
-Ana faktör grupları:
+Motor farklı kaynakları kör biçimde ortalamaz.
 
-- **Büyüme:** ciro, EPS ve net kâr büyümesi
-- **Kârlılık:** ROE, ROA, ROIC, brüt/faaliyet/net/FAVÖK marjları
-- **Finansal Sağlık:** cari oran, likidite, borç/özsermaye, net borç/FAVÖK, özsermaye/varlık
-- **Nakit Kalitesi:** FCF marjı ve Piotroski F-Score
-- **Değerleme:** F/K, PD/DD, FD/FAVÖK ve Fiyat/FCF
-- **Bilgi:** temettü verimi
+- İş Yatırım / BorsaPy mali tabloları: hedef şirketin tarihsel bilanço, gelir tablosu ve uygun profillerde nakit akışı için ana kaynaktır.
+- İş Yatırım gerçekleşen şirket oranları: hedef hissede F/K, PD/DD, FD/FAVÖK, ROE ve ROA bulunabildiğinde önceliklidir.
+- Mali tablodan yeniden hesaplanan TTM metrikleri: ciro/net kâr büyümesi, marjlar, FCF marjı, cari oran ve özkaynak/aktif gibi alanlarda hedef şirket için önceliklidir.
+- TradingView Screener: tüm BIST üzerindeki hızlı çapraz-kesit dağılımı, sektör/endüstri medyanı ve yüzdelik sıralamalar için kullanılır.
+- BorsaPy Index: XU100 ve uygun sektör endeksi bileşenleri/performansı için önceliklidir.
+- Kaynaklar ayrışırsa fark gizlenmez; doğrulama tablosunda görünür ve veri güven puanına yansır.
 
-Banka ve sigorta gibi finansal şirketlerde sanayi şirketlerine özgü ve anlamsız kalabilecek bazı oranlar otomatik olarak skor dışı bırakılır. GYO/Holding tarafında PD/DD gerçek NAD iskontosu olarak kabul edilmez.
+Eksik veri sıfır kabul edilmez.
 
-## Profesyonel genel değerlendirme
+## Karşılaştırma evrenleri
 
-Raporun sonunda sistem yalnız puan tekrarı yapmaz. Büyüme, kârlılık, finansal sağlık, nakit kalitesi ve değerlemeyi birlikte okuyarak:
+Sabit 5-10 emsal listesi kullanılmaz. Her çalışmada güncel evren üzerinden aynı endüstri, aynı sektör, güncel BIST100 ve veri bulunan tüm BIST medyanları ile yüzdelik/göreli konumları hesaplanır. Bir şirketin farklı pay sınıflarının dağılımı yapay biçimde bozmaması için şirket bazlı tekilleştirme uygulanır.
 
-- şirketin güçlü/zayıf yönlerini,
-- iyi şirket / ucuz hisse ayrımını,
-- sektör içindeki konumunu,
-- BIST100 ve tüm BIST dağılımındaki yerini,
-- BIST100'e karşı 3A / 6A / 12A relatif fiyat performansını
+## Ana finansal katmanlar
 
-tek bir profesyonel genel değerlendirmede birleştirir.
+Normal sanayi/operasyonel şirketlerde veri bulunabildiği ölçüde şu aileler kullanılır:
 
-## Veri
+- Değerleme: F/K, PD/DD, FD/FAVÖK, Fiyat/FCF
+- Kârlılık: ROE, ROA, ROIC, brüt/faaliyet/net/FAVÖK marjları
+- Büyüme: ciro, EPS, net kâr, 3Y CAGR
+- Finansal sağlık: cari oran, likidite, borç/özsermaye, net borç/FAVÖK, özsermaye/aktif
+- Nakit kalitesi: faaliyet nakit akışı, FCF, CFO/net kâr, FCF marjı, Piotroski
+- Relatif fiyat: XU100 ve uygun sektör endeksine karşı 3A/6A/12A performans
 
-- **BorsaPy**: KAP şirket metadata'sı, gerçek BIST endeks bileşenleri, hedef şirket için İş Yatırım mali tabloları ve BIST'e özgü doğrulama katmanı
+Negatif veya sıfır F/K, PD/DD, FD/FAVÖK ve Fiyat/FCF ucuz sayılmaz; ekonomik olarak anlamsızsa skor dışı bırakılır.
 
-- Temel evren ve finansal karşılaştırmalar: **TradingView Screener** veri alanları
-- XU100 ve uygun sektör endeksi fiyat performansı: **BorsaPy/TradingView öncelikli**, Yahoo Finance fallback
-- Çıktılar: HTML + JSON + o çalışmada kullanılan tam BIST evreni CSV snapshot
+## 12 çeyrek ve yıllık özgeçmiş
 
-> Veri kapsamı sağlayıcıya göre değişebilir. Eksik veri uydurulmaz. Mutlak referans bantları "evrensel doğru değer" değildir; finansal oran mantığı ve şirket profiline göre kalibre edilmiş analitik eşiklerdir. Dağılım karşılaştırmaları ayrı gösterilir.
+Hedef şirket için son 12 çeyrek finansallar, uygun olduğunda 5 yıllık yıllık finansallar, yıllık ciro/net kâr CAGR, marj yönü, özkaynak/aktif gelişimi, borç ve nakit trendi, kârın nakde dönüşümü ve şirketin kendi yıllık net marj / yaklaşık ROE / yaklaşık ROA eğilimi raporlanır.
 
-## GitHub üzerinden kullanım
+Tarihsel ROE/ROA tablosunda dönem sonu özkaynak/aktif kullanıldığı için bu bölüm yaklaşık özgeçmiş karşılaştırmasıdır; ana sektör skorundan ayrı tutulur.
 
-1. **Actions** sekmesine gir.
-2. **Hisse Analizi** workflow'unu aç.
-3. **Run workflow** seç.
-4. \`symbol\` alanına örneğin \`ASELS\`, \`AKBNK\` veya \`TUPRS\` yaz.
-5. Çalışma bittiğinde \`bist-report-<SEMBOL>\` artifact'ını indir.
+## Özel şirket tipi motorları
 
-Artifact içinde:
+### Banka
 
-- \`<SEMBOL>_report.html\`
-- \`<SEMBOL>_report.json\`
-- \`<SEMBOL>_universe_snapshot.csv\`
+Banka profili UFRS finansallarıyla değerlendirilir. Sanayi tipi FD/FAVÖK, FCF, net marj ve net borç/FAVÖK ana skora sokulmaz. Net kâr, net faiz geliri, net ücret/komisyon, kredi, mevduat/toplanan fon, aktif, özkaynak ve özkaynak/aktif gelişimi ayrı izlenir. Katılım bankalarındaki farklı satır isimleri için alias/fallback bulunur.
 
-bulunur.
+### Sigorta
 
-## Yerel kullanım
+Sigorta motoru sanayi şirketi ciro/FAVÖK/FCF mantığına zorlanmaz. Net yazılan primler, prim büyümesi, genel teknik bölüm dengesi, teknik denge/net yazılan prim oranı, net kâr büyümesi ve aktif/özkaynak gelişimi ayrı raporlanır.
 
-\`\`\`powershell
-pip install -r requirements.txt
-python analyze.py ASELS
-\`\`\`
+### Banka dışı finansal şirketler
 
-## Sonraki aşamalar
+Finansal kiralama, faktoring, menkul değerler ve benzeri şirketlerde UFRS/XI_29 fallback uygulanır. Finans sektörü faaliyet sonucu, finansal alacaklar, finansal yükümlülükler, net kâr, aktif ve özkaynak trendi ayrı değerlendirilir. Sanayi tipi net marj/FAVÖK/FCF ana skora zorlanmaz.
 
-- KAP/resmî finansal tablolarla veri doğrulama katmanı
-- 3Y/5Y tarihsel finansal trend ve şirketin kendi tarihsel medyanı
-- Banka, GYO, Holding, Sigorta için daha derin özel motorlar
-- Sektör sıralama/tarama komutları
-- Telegram \`/analiz ASELS\`
-- Teknik + temel + relatif güç birleşik araştırma motoru
+### GYO
 
+GYO'da klasik F/K, PD/DD ve FD/FAVÖK tek başına ucuzluk skoru üretmez. Gerçek NAD/PD-NAD, portföy ekspertiz değerleri, proje/arsa stoğu, satış ve teslim takvimi, finansman yapısı ve XGMYO relatif performansı önceliklidir. İş Yatırım bir gerçekleşen oranı A/D gösteriyorsa başka sağlayıcıdaki sayı gerçekleşen oran gibi skora sokulmaz.
 
-## GYO özel yaklaşımı
+### Holding ve Yatırım Ortaklığı
 
-GYO'lar sanayi şirketleriyle aynı değerleme motoruna zorlanmaz. Özellikle:
+Holding/portföy yapılarında klasik konsolide sanayi çarpanları otomatik değerleme skoru üretmez. Esas değerleme için iştirak/portföy bazlı NAD gerekir.
 
-- F/K, PD/DD, FD/FAVÖK, Fiyat/FCF, EPS büyümesi, Net Borç/FAVÖK, FCF marjı ve Piotroski gibi metrikler raporda görülebilir ancak **genel GYO değerleme/kalite skorunu otomatik olarak belirlemez**.
-- Seçilen GYO için gerçekleşen F/K, PD/DD ve FD/FAVÖK verisinde **İş Yatırım şirket kartı önceliklidir**. İş Yatırım oranı A/D gösteriyorsa başka sağlayıcıdaki sayı gerçekleşen oranmış gibi skora sokulmaz.
-- PD/DD yalnızca defter değeri karşılaştırmasıdır; **NAD (Net Aktif Değer) iskontosu değildir**.
-- Profesyonel GYO değerlemesinde gerçek NAD/PD-NAD, portföy ekspertiz değerleri, arsa/proje stoğu, ön satış ve teslimat takvimi, finansman ihtiyacı ile XGMYO relatif performansı birlikte değerlendirilmelidir.
-- Proje geliştirici GYO'larda negatif FCF tek başına sanayi şirketlerindeki kadar doğrudan kalite cezası sayılmaz; yatırım/proje geliştirme döngüsü ayrıca ayrıştırılır.
-- Net borç hesabında finansal borçlara ek olarak diğer finansal yükümlülükler dikkate alınır; nakit ve finansal yatırımlar düşülür ve sonuç İş Yatırım şirket kartıyla çapraz kontrol edilir.
+data/nav_inputs.csv dosyasına güvenilir bir NAD girildiğinde sistem PD/NAD iskonto/primini hesaplar. Örnek satır:
 
-Regresyon testleri EKGYO üzerinde bu kuralları semantik olarak doğrular; yalnızca script'in hata vermeden çalışması yeterli kabul edilmez.
+    symbol,nav_total_try,as_of,source,note
+    KCHOL,1000000000000,2026-09-30,Kaynak adı,Açıklama
 
+NAD girilmemişse rapor VALUATION_PARTIAL / NAV_REQUIRED verir; tahmin uydurmaz.
 
-## Tüm BIST otomatik kalite/audit sistemi
+## Rapor hazırlık durumu
 
-Repo artık yalnız ASELS/AKBNK/EKGYO spot regresyonlarıyla yetinmez. \`Full BIST Audit\` workflow'u güncel BIST şirket evrenini şirket bazında tekilleştirir ve hisseleri 8 paralel shard'a bölerek **her sembolü tek tek** kontrol eder.
+Her rapor makine-okunur bir hazırlık statüsü taşır:
 
-Her şirket için denetlenen başlıca kurallar:
+- READY
+- READY_WITH_WARNINGS
+- VALUATION_PARTIAL
+- PARTIAL
+- REVIEW
 
-- profil sınıflandırması ve profil-bazlı skor dışı metrikler,
-- Banka/GYO/Holding/Sigorta/Yatırım Ortaklığı özel kuralları,
-- bilanço/gelir tablosu çekilebilirliği ve çekirdek satır kapsaması,
-- negatif özkaynakta anlamsız ROE/PD-DD/Borç-Özsermaye skorlarının engellenmesi,
-- İş Yatırım ve TradingView oranları arasındaki büyük veri uyuşmazlıkları,
-- aşırı/şüpheli finansal oranlar,
-- sektör/endüstri/BIST100/tüm BIST karşılaştırma evrenlerinin yeterliliği,
-- GYO için XGMYO, banka için XBANK gibi profil-endeks eşleşmeleri,
-- skor ve yüzdeliklerin 0–100 matematiksel sınırları.
+GYO/Holding için NAD yoksa tüm rapor bozuk sayılmaz; finansal analiz devam eder fakat değerleme katmanı kısmi olarak işaretlenir.
 
-Workflow sonunda \`full-bist-audit\` artifact'ı üretilir:
+## Kaynak doğrulaması
 
-- \`full_bist_audit.csv\` — şirket bazında tüm bulgular,
-- \`full_bist_audit_summary.json\` — makine okunur özet,
-- \`full_bist_audit.md\` — insan okunur hata/uyarı özeti.
+TradingView, İş Yatırım şirket kartı ve mali tablodan türetilen metrikler karşılaştırılır. Rapor uyumlu değerleri, güncelleme/baz farklarını, büyük sağlayıcı farklarını ve TMS 29 / yeniden ifade kaynaklı olası ayrışmaları ayrı gösterir. Veri güveni düşükse profesyonel sonuç daha temkinli yazılır; kaynak farkı sessizce ortalanmaz.
 
-Audit'te bir şirketin veri sağlayıcısında eksik veri bulunması tek başına "motor hatası" sayılmaz. Sistem **motor hatası**, **kritik muhasebe/profil hatası**, **kaynak uyuşmazlığı** ve **veri eksikliği/uyarı** ayrımını korur.
+## Tüm BIST kalite denetimi
+
+.github/workflows/full_bist_audit.yml güncel BIST evrenini 8 paralel parçaya bölerek şirket şirket denetler.
+
+Denetlenen başlıca kurallar:
+
+- profil sınıflandırması,
+- banka/GYO/holding/sigorta/finansal kurum kuralları,
+- özel profil motorlarının çalışması,
+- negatif özkaynak ve anlamsız payda korumaları,
+- negatif/sıfır değerleme çarpanlarının yanlış ucuz skorlanmaması,
+- finansal tablo kapsaması,
+- İş Yatırım–TradingView farkları,
+- skor/yüzdelik matematik sınırları,
+- XBANK/XGMYO vb. sektör endeksi eşleşmeleri.
+
+Çıktı dosyaları full_bist_audit.csv, full_bist_audit_summary.json ve full_bist_audit.md olur. Veri sağlayıcısında tarihsel finansal bulunmaması motor hatasıyla aynı şey değildir; veri eksikliği ayrı sınıflandırılır.
+
+## Regresyon seti
+
+Temsili profiller otomatik test edilir:
+
+- ASELS — sanayi/savunma
+- AKBNK — banka
+- ALBRK — katılım bankası
+- EKGYO — GYO / NAD kapısı
+- KCHOL — holding / NAD kapısı
+- AGESA — sigorta
+- GLBMD — banka dışı finansal
+- ISFIN — tarihsel veri yoksa graceful fallback
+
+## Çıktılar
+
+Bir analiz artifact'ında veri bulunabildiği ölçüde SEMBOL_report.html, SEMBOL_report.json, SEMBOL_universe_snapshot.csv, 12 çeyreklik bilanço/gelir/nakit akışı CSV'leri ve yıllık gelir/bilanço CSV'leri oluşur.
+
+## Dosya yapısı
+
+    analyze.py
+    history_engine.py
+    special_profiles.py
+    audit_all.py
+    audit_merge.py
+    regression_checks.py
+    data/nav_inputs.csv
+    .github/workflows/analyze.yml
+    .github/workflows/regression.yml
+    .github/workflows/full_bist_audit.yml
+
+## Sınırlar
+
+- GYO/Holding gerçek NAD verisi güvenilir bir kaynaktan gelmiyorsa sistem bunu uydurmaz.
+- Sağlayıcıların raporlama zamanı ve TMS 29 bazları farklı olabilir.
+- Bazı yeni/özel finansal şirketlerde tarihsel tablo sağlayıcıda bulunmayabilir; rapor PARTIAL olarak devam eder.
+- Skorlar araştırma modelidir; al/sat kararı değildir.
 
 ## Uyarı
 
 Bu proje araştırma ve veri analizi amaçlıdır. Üretilen raporlar yatırım tavsiyesi değildir.
-
-## BorsaPy entegrasyonu
-
-BorsaPy tüm BIST evreninin ağır bilanço çağrıları için kullanılmaz. Çapraz kesit karşılaştırması TradingView Screener ile hızlı tutulur; BorsaPy seçilen hisse üzerinde derin doğrulama ve tarihsel mali tablo erişimi için kullanılır. Bankalarda UFRS, diğer şirketlerde XI_29 mali tablo formatı tercih edilir.
-
-## Tamamlanan ek katmanlar
-
-- **BorsaPy/KAP/İş Yatırım doğrulaması:** hedef hissenin BIST'e özgü şirket bilgileri ve mali tabloları ikinci veri katmanından kontrol edilir.
-- **12 çeyreklik tarihsel analiz:** son 12 çeyrek bilanço/gelir tablosu; sanayi şirketlerinde nakit akış tablosu.
-- **5 yıllık yıllık tablo erişimi:** uygun veride 3Y CAGR ve uzun dönem büyüme teyidi.
-- **Nakit kalitesi:** CFO/net kâr, FCF marjı, yatırım harcaması/OCF ayrımı ve kârın nakde dönüşümü.
-- **Bilanço trendi:** nakit, finansal borç, net borç, özsermaye, aktif ve likidite değişimleri.
-- **Banka/UFRS motoru:** net kâr, net faiz geliri, ücret-komisyon geliri, kredi, mevduat, özsermaye ve aktif büyümesi ayrı okunur; sanayi tipi FCF/net borç mantığı bankalara zorla uygulanmaz.
-- **Kaynaklar arası doğrulama:** TradingView çapraz-kesit verileri ile mali tablodan türetilen TTM metrikler arasında önemli ayrışmalar raporda belirtilir.
-- **Veri güven skoru:** eksik/çelişkili veriler kesin yorum üretmek yerine güven uyarısıyla sunulur.
-- **Gerçek BIST100 bileşenleri:** BorsaPy Index bileşenleri önceliklidir; fallback kaynak bulunur.
-- **Sektör endeksi relatif performansı:** uygun profillerde XBANK, XUTEK, XHOLD, XSGRT, XGMYO vb. endekslere karşı 3A/6A/12A relatif fiyat davranışı hesaplanır.
-- **Regresyon smoke testleri:** ASELS (sanayi/savunma) ve AKBNK (banka/UFRS) otomatik test edilir.
-
-## Sonraki geliştirme alanları
-
-- GYO için gerçek NAD/iskonto motoru
-- Holdingler için iştirak/NAD bazlı özel değerleme
-- Sigorta şirketleri için prim üretimi, teknik kârlılık ve sermaye yeterliliği odaklı özel motor
-- Şirketin kendi 5 yıllık değerleme bandı ve tarihsel çarpan yüzdelikleri
-- Sektör sıralama/tarama komutları
-- Telegram `/analiz ASELS`
-- Teknik + temel + relatif güç birleşik araştırma motoru
