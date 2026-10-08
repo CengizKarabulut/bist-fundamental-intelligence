@@ -1,4 +1,5 @@
 name: Regression Smoke Test
+# bank-profile coverage
 
 on:
   push:
