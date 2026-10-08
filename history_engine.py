@@ -69,6 +69,9 @@ BALANCE_ROWS = {
         "Mevduat", "Toplam Mevduat",
         "Mevduatlar", "I. MEVDUAT",
     ],
+    "financial_investments": [
+        "Finansal Yatırımlar",
+    ],
 }
 
 CASHFLOW_ROWS = {
@@ -100,6 +103,7 @@ FINANCIAL_DEBT_KEYWORDS = [
     "Finansal Borç",
     "Kısa Vadeli Borçlanmalar",
     "Uzun Vadeli Borçlanmalar",
+    "Diğer Finansal Yükümlülükler",
 ]
 
 
@@ -668,13 +672,23 @@ def build_historical_analysis(symbol: str, profile: str, report_dir: Path | None
 
         cash_now, cash_old = _same_quarter_year_ago(balance.get("cash", pd.Series(dtype=float)))
         debt_now, debt_old = _same_quarter_year_ago(balance.get("financial_debt", pd.Series(dtype=float)))
+        fininv_now, fininv_old = _same_quarter_year_ago(balance.get("financial_investments", pd.Series(dtype=float)))
         equity_now, equity_old = _same_quarter_year_ago(balance.get("equity", pd.Series(dtype=float)))
         assets_now, assets_old = _same_quarter_year_ago(balance.get("total_assets", pd.Series(dtype=float)))
         ca_now, ca_old = _same_quarter_year_ago(balance.get("current_assets", pd.Series(dtype=float)))
         cl_now, cl_old = _same_quarter_year_ago(balance.get("current_liabilities", pd.Series(dtype=float)))
 
-        net_debt_now = (debt_now - cash_now) if debt_now is not None and cash_now is not None else None
-        net_debt_old = (debt_old - cash_old) if debt_old is not None and cash_old is not None else None
+        # İş Yatırım's company-card net debt includes other financial liabilities
+        # and deducts cash/financial investments. This is materially important for
+        # project-heavy GYOs such as EKGYO.
+        net_debt_now = (
+            debt_now - (cash_now or 0.0) - (fininv_now or 0.0)
+            if debt_now is not None else None
+        )
+        net_debt_old = (
+            debt_old - (cash_old or 0.0) - (fininv_old or 0.0)
+            if debt_old is not None else None
+        )
         current_ratio_now = _safe_ratio(ca_now, cl_now)
         current_ratio_old = _safe_ratio(ca_old, cl_old)
 
@@ -711,7 +725,14 @@ def build_historical_analysis(symbol: str, profile: str, report_dir: Path | None
             "cash_yoy": _pct_change(cash_now, cash_old),
             "financial_debt": debt_now,
             "financial_debt_yoy": _pct_change(debt_now, debt_old),
-            "net_debt": net_debt_now,
+            "financial_investments": fininv_now,
+            "net_debt_statement": net_debt_now,
+            "net_debt_provider": result.get("market",{}).get("net_debt"),
+            "net_debt": (
+                result.get("market",{}).get("net_debt")
+                if result.get("market",{}).get("net_debt") is not None
+                else net_debt_now
+            ),
             "net_debt_yoy": _pct_change(net_debt_now, net_debt_old)
                 if net_debt_old is not None and net_debt_old > 0 else None,
             "equity": equity_now,
@@ -733,6 +754,16 @@ def build_historical_analysis(symbol: str, profile: str, report_dir: Path | None
         summary["net_interest_income_yoy"] = _pct_change(nii_now, nii_old)
         summary["fee_income_yoy"] = _pct_change(fee_now, fee_old)
         summary["equity_to_assets"] = _safe_ratio(equity_now, assets_now, 100.0)
+        mcap = result.get("market",{}).get("market_cap")
+        summary["book_equity_discount"] = (
+            (1.0 - (mcap / equity_now)) * 100.0
+            if mcap is not None and equity_now is not None and equity_now > 0 else None
+        )
+        provider_nd = result.get("market",{}).get("net_debt")
+        summary["net_debt_source_gap_pct"] = (
+            ((net_debt_now / provider_nd) - 1.0) * 100.0
+            if provider_nd not in (None,0) and net_debt_now is not None else None
+        )
 
         result["summary"] = summary
 
