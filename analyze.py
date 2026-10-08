@@ -237,7 +237,10 @@ def enrich_isyatirim_cross_section(df):
     extra=pd.DataFrame.from_dict(records,orient="index")
     extra.index.name="symbol"
     out=out.merge(extra.reset_index(),on="symbol",how="left")
-    out["iy_market_available"]=out.get("iy_market_available",False).fillna(False).astype(bool)
+    if "iy_market_available" not in out.columns:
+        out["iy_market_available"]=False
+    else:
+        out["iy_market_available"]=out["iy_market_available"].fillna(False).astype(bool)
     return out
 
 
