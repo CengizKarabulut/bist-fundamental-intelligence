@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from analyze import profile, apply_profile_primary_source
+from analyze import profile, apply_profile_primary_source, economically_valid
 
 R = Path("reports")
 
@@ -32,6 +32,12 @@ def main():
     assert profile({"description":"Petkim Petrokimya Holding A.S.","industry":"Chemicals: Specialty","sector":"Process Industries"}) == "Genel"
     assert profile({"description":"Deva Holding A.S.","industry":"Pharmaceuticals: Major","sector":"Health Technology"}) == "Genel"
 
+    # Non-positive valuation multiples are A/D, never "cheap".
+    assert economically_valid("pe",-5.0) is False
+    assert economically_valid("pb",0.0) is False
+    assert economically_valid("ev",-1.0) is False
+    assert economically_valid("pfcf",12.0) is True
+
     # Negative-equity denominator guard must prevent misleading ratio scores.
     dummy={
         "roe":{"scoreable":True,"abs":100.0},
@@ -49,10 +55,21 @@ def main():
     ase = load("ASELS")
     akb = load("AKBNK")
     ekg = load("EKGYO")
+    ages = load("AGESA")
+    isfin = load("ISFIN")
 
     assert ase["profile"] == "Savunma/Teknoloji", ase["profile"]
     assert akb["profile"] == "Banka", akb["profile"]
     assert ekg["profile"] == "GYO", ekg["profile"]
+    assert ages["profile"] == "Sigorta", ages["profile"]
+    assert isfin["profile"] == "Finansal", isfin["profile"]
+
+    # Financial institutions should prefer UFRS and must not fail simply because
+    # XI_29 industrial statements are unavailable.
+    for r in (ages,isfin):
+        hist=r["historical_analysis"]
+        assert not hist.get("error"), hist.get("error")
+        assert hist.get("financial_group_used") == "UFRS", hist.get("financial_group_used")
 
     # GYO: classic industrial valuation multiples must not create a valuation score.
     assert ekg["scores"]["valuation"] is None, ekg["scores"]["valuation"]
@@ -87,7 +104,7 @@ def main():
     for k in ("nde", "fcfm", "ev"):
         assert akb["metrics"][k]["app"] is False, (k, akb["metrics"][k])
 
-    print("Semantic regression checks passed: ASELS + AKBNK + EKGYO")
+    print("Semantic regression checks passed: ASELS + AKBNK + EKGYO + AGESA + ISFIN")
 
 
 if __name__ == "__main__":
