@@ -90,6 +90,20 @@ python analyze.py ASELS
 - Telegram \`/analiz ASELS\`
 - Teknik + temel + relatif güç birleşik araştırma motoru
 
+
+## GYO özel yaklaşımı
+
+GYO'lar sanayi şirketleriyle aynı değerleme motoruna zorlanmaz. Özellikle:
+
+- F/K, PD/DD, FD/FAVÖK, Fiyat/FCF, EPS büyümesi, Net Borç/FAVÖK, FCF marjı ve Piotroski gibi metrikler raporda görülebilir ancak **genel GYO değerleme/kalite skorunu otomatik olarak belirlemez**.
+- Seçilen GYO için gerçekleşen F/K, PD/DD ve FD/FAVÖK verisinde **İş Yatırım şirket kartı önceliklidir**. İş Yatırım oranı A/D gösteriyorsa başka sağlayıcıdaki sayı gerçekleşen oranmış gibi skora sokulmaz.
+- PD/DD yalnızca defter değeri karşılaştırmasıdır; **NAD (Net Aktif Değer) iskontosu değildir**.
+- Profesyonel GYO değerlemesinde gerçek NAD/PD-NAD, portföy ekspertiz değerleri, arsa/proje stoğu, ön satış ve teslimat takvimi, finansman ihtiyacı ile XGMYO relatif performansı birlikte değerlendirilmelidir.
+- Proje geliştirici GYO'larda negatif FCF tek başına sanayi şirketlerindeki kadar doğrudan kalite cezası sayılmaz; yatırım/proje geliştirme döngüsü ayrıca ayrıştırılır.
+- Net borç hesabında finansal borçlara ek olarak diğer finansal yükümlülükler dikkate alınır; nakit ve finansal yatırımlar düşülür ve sonuç İş Yatırım şirket kartıyla çapraz kontrol edilir.
+
+Regresyon testleri EKGYO üzerinde bu kuralları semantik olarak doğrular; yalnızca script'in hata vermeden çalışması yeterli kabul edilmez.
+
 ## Uyarı
 
 Bu proje araştırma ve veri analizi amaçlıdır. Üretilen raporlar yatırım tavsiyesi değildir.
