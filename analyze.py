@@ -257,7 +257,7 @@ def apply_profile_primary_source(a,p,history,g):
         return a
 
     # GYO realised valuation: İş Yatırım company-card data takes priority.
-    if p=="GYO" and not history.get("metadata_warning"):
+    if p=="GYO" and history.get("market_source_available",False):
         market=history.get("market",{})
         mapping={"pe":"pe","pb":"pb","ev":"ev_ebitda","div":"dividend_yield"}
         for k,mkey in mapping.items():
