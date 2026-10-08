@@ -2,7 +2,7 @@
 
 BIST hisseleri için tam evrenli temel analiz, sektör/endüstri karşılaştırması ve profesyonel raporlama motoru.
 
-## v0.2 — Full Universe Engine
+## v0.3 — Full Universe + Historical Financial Intelligence
 
 Bir hisse kodu verildiğinde sistem artık sabit sayıda "emsal" seçmez. Her çalışmada güncel BIST pay evrenini dinamik olarak çeker ve seçilen hisseyi dört ayrı dağılım içinde değerlendirir:
 
@@ -53,7 +53,7 @@ tek bir profesyonel genel değerlendirmede birleştirir.
 - **BorsaPy**: KAP şirket metadata'sı, gerçek BIST endeks bileşenleri, hedef şirket için İş Yatırım mali tabloları ve BIST'e özgü doğrulama katmanı
 
 - Temel evren ve finansal karşılaştırmalar: **TradingView Screener** veri alanları
-- XU100 fiyat performansı: **Yahoo Finance**
+- XU100 ve uygun sektör endeksi fiyat performansı: **BorsaPy/TradingView öncelikli**, Yahoo Finance fallback
 - Çıktılar: HTML + JSON + o çalışmada kullanılan tam BIST evreni CSV snapshot
 
 > Veri kapsamı sağlayıcıya göre değişebilir. Eksik veri uydurulmaz. Mutlak referans bantları "evrensel doğru değer" değildir; finansal oran mantığı ve şirket profiline göre kalibre edilmiş analitik eşiklerdir. Dağılım karşılaştırmaları ayrı gösterilir.
@@ -97,3 +97,27 @@ Bu proje araştırma ve veri analizi amaçlıdır. Üretilen raporlar yatırım 
 ## BorsaPy entegrasyonu
 
 BorsaPy tüm BIST evreninin ağır bilanço çağrıları için kullanılmaz. Çapraz kesit karşılaştırması TradingView Screener ile hızlı tutulur; BorsaPy seçilen hisse üzerinde derin doğrulama ve tarihsel mali tablo erişimi için kullanılır. Bankalarda UFRS, diğer şirketlerde XI_29 mali tablo formatı tercih edilir.
+
+## Tamamlanan ek katmanlar
+
+- **BorsaPy/KAP/İş Yatırım doğrulaması:** hedef hissenin BIST'e özgü şirket bilgileri ve mali tabloları ikinci veri katmanından kontrol edilir.
+- **12 çeyreklik tarihsel analiz:** son 12 çeyrek bilanço/gelir tablosu; sanayi şirketlerinde nakit akış tablosu.
+- **5 yıllık yıllık tablo erişimi:** uygun veride 3Y CAGR ve uzun dönem büyüme teyidi.
+- **Nakit kalitesi:** CFO/net kâr, FCF marjı, yatırım harcaması/OCF ayrımı ve kârın nakde dönüşümü.
+- **Bilanço trendi:** nakit, finansal borç, net borç, özsermaye, aktif ve likidite değişimleri.
+- **Banka/UFRS motoru:** net kâr, net faiz geliri, ücret-komisyon geliri, kredi, mevduat, özsermaye ve aktif büyümesi ayrı okunur; sanayi tipi FCF/net borç mantığı bankalara zorla uygulanmaz.
+- **Kaynaklar arası doğrulama:** TradingView çapraz-kesit verileri ile mali tablodan türetilen TTM metrikler arasında önemli ayrışmalar raporda belirtilir.
+- **Veri güven skoru:** eksik/çelişkili veriler kesin yorum üretmek yerine güven uyarısıyla sunulur.
+- **Gerçek BIST100 bileşenleri:** BorsaPy Index bileşenleri önceliklidir; fallback kaynak bulunur.
+- **Sektör endeksi relatif performansı:** uygun profillerde XBANK, XUTEK, XHOLD, XSGRT, XGMYO vb. endekslere karşı 3A/6A/12A relatif fiyat davranışı hesaplanır.
+- **Regresyon smoke testleri:** ASELS (sanayi/savunma) ve AKBNK (banka/UFRS) otomatik test edilir.
+
+## Sonraki geliştirme alanları
+
+- GYO için gerçek NAD/iskonto motoru
+- Holdingler için iştirak/NAD bazlı özel değerleme
+- Sigorta şirketleri için prim üretimi, teknik kârlılık ve sermaye yeterliliği odaklı özel motor
+- Şirketin kendi 5 yıllık değerleme bandı ve tarihsel çarpan yüzdelikleri
+- Sektör sıralama/tarama komutları
+- Telegram `/analiz ASELS`
+- Teknik + temel + relatif güç birleşik araştırma motoru
