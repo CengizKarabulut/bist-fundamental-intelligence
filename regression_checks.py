@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from analyze import profile, apply_profile_primary_source, economically_valid
+from version import __version__
 
 R = Path("reports")
 
@@ -22,6 +23,10 @@ def near(a, b, rel=0.02):
 
 
 def main():
+    # Single source-of-truth guard for release metadata.
+    version_file=Path("VERSION").read_text(encoding="utf-8").strip()
+    assert version_file == __version__, f"VERSION dosyası ({version_file}) ile version.py ({__version__}) farklı"
+
     # Provider-industry labels can be broad/misleading; company semantics must win.
     assert profile({"description":"Haci Omer Sabanci Holding A.S.","industry":"Regional Banks","sector":"Finance"}) == "Holding"
     assert profile({"description":"Is Yatirim Menkul Degerler AS","industry":"Investment Banks/Brokers","sector":"Finance"}) == "Finansal"
