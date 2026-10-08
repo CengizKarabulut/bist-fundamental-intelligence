@@ -58,6 +58,7 @@ def main():
     akb = load("AKBNK")
     albrk = load("ALBRK")
     ekg = load("EKGYO")
+    kchol = load("KCHOL")
     ages = load("AGESA")
     glbmd = load("GLBMD")
     isfin = load("ISFIN")
@@ -66,6 +67,7 @@ def main():
     assert akb["profile"] == "Banka", akb["profile"]
     assert albrk["profile"] == "Banka", albrk["profile"]
     assert ekg["profile"] == "GYO", ekg["profile"]
+    assert kchol["profile"] == "Holding", kchol["profile"]
 
     # Participation-bank row aliases must resolve completely.
     ah=albrk["historical_analysis"]
@@ -93,6 +95,24 @@ def main():
     ih=isfin["historical_analysis"]
     assert ih.get("error"), "ISFIN is expected to exercise the no-history fallback"
     assert isfin["scores"] is not None
+
+    # Special-profile engines must expose profile-appropriate metrics.
+    ekg_sp=ekg["historical_analysis"].get("special_profile_analysis",{})
+    assert ekg_sp.get("status") in {"NAV_REQUIRED","NAV_AVAILABLE"}, ekg_sp
+    if ekg_sp.get("status")=="NAV_REQUIRED":
+        assert ekg_sp.get("valuation",{}).get("pd_nav_discount_pct") is None
+
+    kh_sp=kchol["historical_analysis"].get("special_profile_analysis",{})
+    assert kh_sp.get("status") in {"NAV_REQUIRED","NAV_AVAILABLE"}, kh_sp
+    assert kchol["scores"]["valuation"] is None, kchol["scores"]["valuation"]
+
+    ag_sp=ages["historical_analysis"].get("special_profile_analysis",{})
+    assert ag_sp.get("status")=="INSURANCE_ENGINE", ag_sp
+    assert ag_sp.get("metrics",{}).get("net_written_premium") is not None, ag_sp
+    assert ag_sp.get("metrics",{}).get("technical_balance") is not None, ag_sp
+
+    gl_sp=glbmd["historical_analysis"].get("special_profile_analysis",{})
+    assert gl_sp.get("status")=="FINANCIAL_ENGINE", gl_sp
 
     # GYO: classic industrial valuation multiples must not create a valuation score.
     assert ekg["scores"]["valuation"] is None, ekg["scores"]["valuation"]
@@ -127,7 +147,7 @@ def main():
     for k in ("nde", "fcfm", "ev"):
         assert akb["metrics"][k]["app"] is False, (k, akb["metrics"][k])
 
-    print("Semantic regression checks passed: ASELS + AKBNK + ALBRK + EKGYO + AGESA + GLBMD + ISFIN")
+    print("Semantic regression checks passed: ASELS + AKBNK + ALBRK + EKGYO + KCHOL + AGESA + GLBMD + ISFIN")
 
 
 if __name__ == "__main__":
