@@ -1317,6 +1317,8 @@ def safe(v):
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("symbol"); a=ap.parse_args(); sym=a.symbol.upper().replace("BIST:","").replace(".IS","").strip()
+    if not re.fullmatch(r"[A-Z0-9]{2,12}", sym):
+        raise SystemExit("Geçersiz BIST sembolü. Yalnız A-Z / 0-9 ve 2-12 karakter kullanın.")
     print("[1/11] Tüm BIST + İş Yatırım karşılaştırma evreni alınıyor..."); u=universe(include_isyatirim=True); h=u[u.symbol==sym]
     if h.empty:raise SystemExit(f"{sym} bulunamadı")
     t=h.iloc[0].copy(); t["symbol"]=sym; p=profile(t)
