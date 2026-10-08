@@ -74,7 +74,7 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         g=eng.groups(universe_df,row,xu100_set)
         metrics=eng.analyze(row,profile,g)
         metrics=eng.apply_profile_primary_source(metrics,profile,hist,g)
-        scores=eng.scores(metrics)
+        scores=eng.scores(metrics,profile)
     except Exception as exc:
         add_issue(issues,"ERROR","ENGINE_EXCEPTION",f"{type(exc).__name__}: {exc}")
         return {
