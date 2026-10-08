@@ -126,6 +126,8 @@ def main():
 
     gl_sp=glbmd["historical_analysis"].get("special_profile_analysis",{})
     assert gl_sp.get("status")=="FINANCIAL_ENGINE", gl_sp
+    gchecks={x["label"]:x for x in glbmd["source_validation"]["checks"]}
+    assert gchecks["Cari FD/FAVÖK"]["status"] == "PROFİLDE SKOR DIŞI", gchecks["Cari FD/FAVÖK"]
 
     # Statement-derived target metrics must override generic provider TTM
     # values when İş Yatırım financial statements can reconstruct them.
@@ -177,7 +179,11 @@ def main():
     # Cross-source ciro-growth conflict must be visible, not silently averaged away.
     checks = {x["label"]: x for x in ekg["source_validation"]["checks"]}
     assert "Ciro Büyümesi TTM" in checks
-    assert checks["Ciro Büyümesi TTM"]["status"] in {"KRİTİK FARK", "BAZ/FRESHNESS FARKI"}
+    assert checks["Ciro Büyümesi TTM"]["status"] in {
+        "KRİTİK FARK",
+        "BAZ/FRESHNESS FARKI",
+        "KAYNAK FARKI - BİRİNCİL KAYNAK UYGULANDI",
+    }
 
     # Bank profile must not use industrial cash-flow / net-debt scoring.
     for k in ("nde", "fcfm", "ev"):
