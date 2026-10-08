@@ -20,9 +20,9 @@ jobs:
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 6
       matrix:
-        shard: [0,1,2,3,4,5,6,7,8,9,10,11]
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
     permissions:
       contents: read
     steps:
@@ -42,7 +42,7 @@ jobs:
         run: python -m py_compile analyze.py history_engine.py full_audit.py merge_audit.py
 
       - name: BIST shard taraması
-        run: python full_audit.py --shard ${{ matrix.shard }} --shards 12
+        run: python full_audit.py --shard ${{ matrix.shard }} --shards 16
 
       - name: Shard çıktısını yükle
         if: always()
