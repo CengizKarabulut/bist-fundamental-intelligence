@@ -115,6 +115,13 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         if qperiods is not None and qperiods < 4:
             add_issue(issues,"WARNING","SHORT_HISTORY",f"quarterly_periods={qperiods}")
 
+        if profile=="Banka":
+            bop=dq.get("bank_operating_rows_found")
+            if bop is not None and bop==0:
+                add_issue(issues,"WARNING","BANK_OPERATING_ROW_COVERAGE","loan/deposit detail rows 0/2")
+            elif bop is not None and bop==1:
+                add_issue(issues,"INFO","BANK_OPERATING_ROW_COVERAGE","loan/deposit detail rows 1/2")
+
         hs=hist.get("summary",{})
         equity=hs.get("equity")
         if finite(equity) and float(equity) <= 0:
