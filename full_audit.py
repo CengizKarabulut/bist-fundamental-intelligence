@@ -64,6 +64,50 @@ def is_financial_like(row: pd.Series) -> bool:
     return any(x in text for x in needles)
 
 
+def _screen_value(row: pd.Series, *keys: str):
+    for key in keys:
+        if key in row.index and pd.notna(row[key]):
+            try:
+                return float(row[key])
+            except Exception:
+                return row[key]
+    return None
+
+
+def isyatirim_bulk_market() -> dict[str, dict[str, Any]]:
+    """Fetch İş Yatırım current metrics in a few bulk screener requests.
+
+    This avoids calling stock.info.todict() hundreds of times during the audit.
+    Missing criterion values remain None; failures degrade gracefully.
+    """
+    merged: dict[str, dict[str, Any]] = {}
+
+    specs = [
+        ("market_cap", 0, 5_000_000, "market_cap", ("market_cap","criteria_8")),
+        ("pe", -1000, 10000, "pe", ("pe","criteria_28","pe_ratio")),
+        ("pb", -100, 1000, "pb", ("pb","criteria_30","pb_ratio")),
+        ("ev_ebitda", -100, 1000, "ev_ebitda", ("ev_ebitda","criteria_29")),
+    ]
+
+    for crit, lo, hi, outkey, candidates in specs:
+        try:
+            d=bp.Screener().add_filter(crit,min=lo,max=hi,required=False).run()
+        except Exception:
+            continue
+        if d is None or d.empty or "symbol" not in d.columns:
+            continue
+        for _, row in d.iterrows():
+            sym=str(row["symbol"]).upper()
+            merged.setdefault(sym,{})
+            value=_screen_value(row,*candidates)
+            if outkey=="market_cap" and value is not None:
+                # İş Yatırım screener market cap criterion is million TL.
+                value=float(value)*1_000_000.0
+            merged[sym][outkey]=value
+
+    return merged
+
+
 def official_profile_sets() -> dict[str, set[str]]:
     out: dict[str, set[str]] = {}
     for code in ["XBANK","XSGRT","XGMYO","XYORT","XHOLD"]:
@@ -145,6 +189,7 @@ def audit_one(
     xset: set[str],
     floor: str,
     official_sets: dict[str, set[str]],
+    bulk_market: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     sym = str(row["symbol"])
     p = profile(row)
@@ -169,7 +214,7 @@ def audit_one(
             report_dir=None,
             quarterly_periods=8,
             annual_periods=0,
-            load_market_info=True,
+            load_market_info=False,
         )
         # One controlled retry separates structural/model failures from transient
         # provider/network errors during the 600+ company sweep.
@@ -181,7 +226,7 @@ def audit_one(
                 report_dir=None,
                 quarterly_periods=8,
                 annual_periods=0,
-                load_market_info=True,
+                load_market_info=False,
             )
             if not retry.get("error"):
                 hist = retry
@@ -194,6 +239,20 @@ def audit_one(
     if hist.get("error"):
         issue_codes.append("HISTORY_ERROR")
         error_text = str(hist.get("error"))
+
+    bm=bulk_market.get(sym)
+    if isinstance(hist,dict) and bm is not None:
+        market=hist.setdefault("market",{})
+        market.update({
+            "market_cap":bm.get("market_cap"),
+            "pe":bm.get("pe"),
+            "pb":bm.get("pb"),
+            "ev_ebitda":bm.get("ev_ebitda"),
+            "net_debt":market.get("net_debt"),
+            "foreign_ratio":market.get("foreign_ratio"),
+            "dividend_yield":market.get("dividend_yield"),
+        })
+        hist["market_source_available"]=True
 
     dq = hist.get("data_quality", {}) if isinstance(hist, dict) else {}
     core_found = dq.get("core_rows_found")
@@ -339,6 +398,9 @@ def main() -> None:
     du = dedupe(u).sort_values("symbol").reset_index(drop=True)
     xset = xu100(u)
     official_sets = official_profile_sets()
+    print("[audit] İş Yatırım toplu cari değerleri alınıyor...")
+    bulk_market = isyatirim_bulk_market()
+    print(f"[audit] İş Yatırım bulk sembol={len(bulk_market)}")
     floor = expected_reporting_floor()
 
     symbols = du.iloc[args.shard::args.shards].copy()
@@ -357,7 +419,7 @@ def main() -> None:
         sym = str(row["symbol"])
         print(f"[audit] {idx}/{len(symbols)} {sym}")
         try:
-            result = audit_one(row, u, xset, floor, official_sets)
+            result = audit_one(row, u, xset, floor, official_sets, bulk_market)
         except Exception as exc:
             result = {
                 "symbol": sym,
