@@ -294,7 +294,44 @@ def source_validation(metrics,history):
     }
 
 
-def overall(t,p,s,perf,history=None,validation=None):
+def bist_index_perf(code):
+    if not code:
+        return {"3m":None,"6m":None,"12m":None}
+    try:
+        d=bp.Index(code).history(period="2y")
+        if d is not None and not d.empty:
+            closes=pd.to_numeric(d["Close"],errors="coerce").dropna().astype(float)
+            def p(n):
+                return (float(closes.iloc[-1])/float(closes.iloc[-n-1])-1)*100 if len(closes)>n else None
+            return {"3m":p(63),"6m":p(126),"12m":p(252)}
+    except Exception:
+        pass
+    return {"3m":None,"6m":None,"12m":None}
+
+
+def sector_index_code(t,p):
+    """Return a conservative BIST sector-index mapping.
+
+    Ambiguous industries deliberately return None instead of forcing a weak
+    benchmark. This keeps relative-price commentary economically coherent.
+    """
+    if p=="Banka":return "XBANK"
+    if p=="Sigorta":return "XSGRT"
+    if p=="GYO":return "XGMYO"
+    if p=="Holding":return "XHOLD"
+    if p=="Savunma/Teknoloji":return "XUTEK"
+
+    sec=str(t.get("sector") or "").casefold()
+    ind=str(t.get("industry") or "").casefold()
+    if "transport" in sec or "airline" in ind or "transport" in ind:return "XULAS"
+    if "communication" in sec or "telecommunication" in ind:return "XILTM"
+    if "electric utilit" in ind or "alternative power" in ind:return "XELKT"
+    if "food" in ind or "food" in sec:return "XGIDA"
+    if any(x in sec for x in ["producer manufacturing","process industries","non-energy minerals"]):return "XUSIN"
+    return None
+
+
+def overall(t,p,s,perf,history=None,validation=None,sector_code=None,sector_perf=None):
     c=s["cats"]
     words=[
         f"{t['symbol']} için temel kalite skoru {fmt(s['quality'])}/100, "
@@ -403,6 +440,15 @@ def overall(t,p,s,perf,history=None,validation=None):
             +("fiyat davranışı temel görünümü destekliyor." if alpha>10 else
               "fiyat davranışı temel görünümün gerisinde kalıyor." if alpha<-10 else
               "relatif fiyatlama belirgin bir ayrışma üretmiyor.")
+        )
+
+    if sp is not None and sector_code and sector_perf and sector_perf.get("12m") is not None:
+        salpha=sp-sector_perf["12m"]
+        words.append(
+            f"Aynı dönemde {sector_code} sektör endeksine göre relatif fark {salpha:+.2f} puan; "
+            +("hisse sektör endeksinin üzerinde." if salpha>5 else
+              "hisse sektör endeksinin altında." if salpha<-5 else
+              "hisse sektör endeksine yakın seyrediyor.")
         )
 
     if validation and validation.get("critical_count",0)>0:
@@ -543,7 +589,7 @@ def history_html(history):
         '</tr>'+''.join(rows)+'</table></div>'
     )
 
-def html_report(t,p,a,s,g,xset,perf,comments,gen,history=None,validation=None):
+def html_report(t,p,a,s,g,xset,perf,comments,gen,history=None,validation=None,sector_code=None,sector_perf=None):
     e=lambda z:html.escape(str(z)); cards=[]
     for n,v in [("Temel Kalite",s["quality"]),("Değerleme",s["valuation"]),("Bileşik",s["composite"]),("Sektör Relatif",s["rel"]["sector"]["overall"]),("BIST100 Relatif",s["rel"]["xu100"]["overall"]),("Tüm BIST Relatif",s["rel"]["bist"]["overall"])]:
         cards.append(f'<div class="card"><small>{e(n)}</small><b>{e(scoretxt(v))}</b><span>{e(status(v))}</span></div>')
@@ -569,11 +615,20 @@ def html_report(t,p,a,s,g,xset,perf,comments,gen,history=None,validation=None):
             f"<td>{e(scoretxt(s['rel']['bist']['cats'][c]))}</td></tr>"
         )
     pr=[]
+    sector_perf=sector_perf or {"3m":None,"6m":None,"12m":None}
     for k,n in [("3m","3 Ay"),("6m","6 Ay"),("12m","12 Ay")]:
-        sp=fnum(t.get({"3m":"Perf.3M","6m":"Perf.6M","12m":"Perf.Y"}[k])); xp=perf[k]; al=sp-xp if sp is not None and xp is not None else None
-        pr.append(f"<tr><td>{n}</td><td>{fmt(sp,'%')}</td><td>{fmt(xp,'%')}</td><td>{'N/A' if al is None else f'{al:+.2f} puan'}</td></tr>")
+        sp=fnum(t.get({"3m":"Perf.3M","6m":"Perf.6M","12m":"Perf.Y"}[k]))
+        xp=perf[k]
+        sip=sector_perf.get(k)
+        al=sp-xp if sp is not None and xp is not None else None
+        sal=sp-sip if sp is not None and sip is not None else None
+        pr.append(
+            f"<tr><td>{n}</td><td>{fmt(sp,'%')}</td><td>{fmt(xp,'%')}</td>"
+            f"<td>{'N/A' if al is None else f'{al:+.2f} puan'}</td>"
+            f"<td>{fmt(sip,'%')}</td><td>{'N/A' if sal is None else f'{sal:+.2f} puan'}</td></tr>"
+        )
     sec=str(t.get('sector') or 'N/A'); ind=str(t.get('industry') or 'N/A'); name=str(t.get('description') or t.get('name') or t['symbol'])
-    return f'''<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(t['symbol'])} — BIST Fundamental Intelligence</title><style>body{{font-family:Arial;background:#0d1117;color:#e6edf3;margin:0;line-height:1.5}}main{{max-width:1500px;margin:auto;padding:28px}}small{{display:block;color:#8b949e}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}.card,section,.note{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px}}.card b{{display:block;font-size:26px}}.table{{overflow:auto;margin:18px 0}}table{{width:100%;min-width:1100px;border-collapse:collapse;background:#161b22}}th,td{{padding:9px;border:1px solid #30363d;text-align:right;vertical-align:top}}th:first-child,td:first-child{{text-align:left}}th{{background:#21262d}}section{{margin:10px 0}}section h3{{margin:0 0 6px;font-size:16px}}section p{{margin:0}}.note{{border-left:4px solid #d29922}}.expert{{border-left-color:#3fb950}}</style></head><body><main><h1>{e(t['symbol'])} — Fundamental Intelligence Report</h1><p>{e(name)} · Profil: {e(p)} · Sektör: {e(sec)} · Endüstri: {e(ind)} · {e(gen)}</p><div class="grid">{''.join(cards)}</div><h2>Profesyonel Genel Değerlendirme</h2><div class="note expert">{e(overall(t,p,s,perf,history,validation))}</div>{history_html(history)}{validation_html(validation)}<h2>Kategori Özeti</h2><div class="table"><table><tr><th>Kategori</th><th>Mutlak</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(cr)}</table></div><h2>Tüm Finansal Faktörler</h2><div class="note">Karşılaştırma sabit emsal sayısıyla değil, güncel tam BIST evreninden otomatik sektör/endüstri, BIST100 ve tüm BIST dağılımlarıyla yapılır. 100 puan göreli olarak daha avantajlı konumu gösterir.</div><div class="table"><table><tr><th>Metrik</th><th>{e(t['symbol'])}</th><th>Mutlak</th><th>Endüstri</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(rows)}</table></div><h2>Faktör Bazlı Uzman Yorumları</h2>{''.join(blocks)}<h2>BIST100 Fiyat Relatif Performansı</h2><div class="table"><table><tr><th>Dönem</th><th>{e(t['symbol'])}</th><th>XU100</th><th>Alfa</th></tr>{''.join(pr)}</table></div><h2>Kapsam</h2><div class="grid"><div class="card"><small>BIST Pay/Kotasyon</small><b>{g.get('raw_count','N/A')}</b></div><div class="card"><small>Benzersiz BIST Şirketi</small><b>{len(g['all'])}</b></div><div class="card"><small>Sektör</small><b>{len(g['sector'])}</b><span>{e(sec)}</span></div><div class="card"><small>Endüstri</small><b>{len(g['industry'])}</b><span>{e(ind)}</span></div><div class="card"><small>BIST100 üyeleri</small><b>{len(xset) if xset else 'N/A'}</b></div></div><p class="note">Eksik veri uydurulmaz. Mutlak referans bantları evrensel kesinlik değil, finansal oran mantığı + profil kalibrasyonudur. GYO/Holding için PD/DD gerçek NAD iskontosu değildir. Araştırma amaçlıdır; yatırım tavsiyesi değildir.</p></main></body></html>'''
+    return f'''<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(t['symbol'])} — BIST Fundamental Intelligence</title><style>body{{font-family:Arial;background:#0d1117;color:#e6edf3;margin:0;line-height:1.5}}main{{max-width:1500px;margin:auto;padding:28px}}small{{display:block;color:#8b949e}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}.card,section,.note{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px}}.card b{{display:block;font-size:26px}}.table{{overflow:auto;margin:18px 0}}table{{width:100%;min-width:1100px;border-collapse:collapse;background:#161b22}}th,td{{padding:9px;border:1px solid #30363d;text-align:right;vertical-align:top}}th:first-child,td:first-child{{text-align:left}}th{{background:#21262d}}section{{margin:10px 0}}section h3{{margin:0 0 6px;font-size:16px}}section p{{margin:0}}.note{{border-left:4px solid #d29922}}.expert{{border-left-color:#3fb950}}</style></head><body><main><h1>{e(t['symbol'])} — Fundamental Intelligence Report</h1><p>{e(name)} · Profil: {e(p)} · Sektör: {e(sec)} · Endüstri: {e(ind)} · {e(gen)}</p><div class="grid">{''.join(cards)}</div><h2>Profesyonel Genel Değerlendirme</h2><div class="note expert">{e(overall(t,p,s,perf,history,validation,sector_code,sector_perf))}</div>{history_html(history)}{validation_html(validation)}<h2>Kategori Özeti</h2><div class="table"><table><tr><th>Kategori</th><th>Mutlak</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(cr)}</table></div><h2>Tüm Finansal Faktörler</h2><div class="note">Karşılaştırma sabit emsal sayısıyla değil, güncel tam BIST evreninden otomatik sektör/endüstri, BIST100 ve tüm BIST dağılımlarıyla yapılır. 100 puan göreli olarak daha avantajlı konumu gösterir.</div><div class="table"><table><tr><th>Metrik</th><th>{e(t['symbol'])}</th><th>Mutlak</th><th>Endüstri</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(rows)}</table></div><h2>Faktör Bazlı Uzman Yorumları</h2>{''.join(blocks)}<h2>Endeks ve Sektör Fiyat Relatif Performansı</h2><div class="table"><table><tr><th>Dönem</th><th>{e(t['symbol'])}</th><th>XU100</th><th>XU100 Alfa</th><th>{e(sector_code or 'Sektör Endeksi N/A')}</th><th>Sektör Alfa</th></tr>{''.join(pr)}</table></div><h2>Kapsam</h2><div class="grid"><div class="card"><small>BIST Pay/Kotasyon</small><b>{g.get('raw_count','N/A')}</b></div><div class="card"><small>Benzersiz BIST Şirketi</small><b>{len(g['all'])}</b></div><div class="card"><small>Sektör</small><b>{len(g['sector'])}</b><span>{e(sec)}</span></div><div class="card"><small>Endüstri</small><b>{len(g['industry'])}</b><span>{e(ind)}</span></div><div class="card"><small>BIST100 üyeleri</small><b>{len(xset) if xset else 'N/A'}</b></div></div><p class="note">Eksik veri uydurulmaz. Mutlak referans bantları evrensel kesinlik değil, finansal oran mantığı + profil kalibrasyonudur. GYO/Holding için PD/DD gerçek NAD iskontosu değildir. Araştırma amaçlıdır; yatırım tavsiyesi değildir.</p></main></body></html>'''
 
 def borsapy_target_context(sym,p):
     """BIST-specific deep context for the selected stock.
@@ -638,22 +693,23 @@ def safe(v):
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("symbol"); a=ap.parse_args(); sym=a.symbol.upper().replace("BIST:","").replace(".IS","").strip()
-    print("[1/10] Tüm BIST evreni alınıyor..."); u=universe(); h=u[u.symbol==sym]
+    print("[1/11] Tüm BIST evreni alınıyor..."); u=universe(); h=u[u.symbol==sym]
     if h.empty:raise SystemExit(f"{sym} bulunamadı")
     t=h.iloc[0].copy(); t["symbol"]=sym; p=profile(t)
-    print("[2/10] BIST100 üyeleri alınıyor..."); xs=xu100(u)
-    print("[3/10] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs); an=analyze(t,p,g); sc=scores(an)
-    print("[4/10] Her faktör yorumlanıyor..."); cm={k:factor_comment(v,p) for k,v in an.items()}
-    print("[5/10] XU100 performansı..."); ip=index_perf()
-    print("[6/10] BorsaPy/KAP ve 12 çeyreklik mali tablolar analiz ediliyor..."); REPORTS.mkdir(exist_ok=True); hist=build_historical_analysis(sym,p,REPORTS)
-    print("[7/10] Tarihsel büyüme, marj, nakit ve bilanço trendleri birleştiriliyor...")
-    print("[8/10] Kaynaklar arası TTM veri doğrulaması yapılıyor..."); valid=source_validation(an,hist)
-    print("[9/10] Profesyonel rapor hazırlanıyor..."); gen=datetime.now().isoformat(timespec="seconds")
+    print("[2/11] BIST100 üyeleri alınıyor..."); xs=xu100(u)
+    print("[3/11] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs); an=analyze(t,p,g); sc=scores(an)
+    print("[4/11] Her faktör yorumlanıyor..."); cm={k:factor_comment(v,p) for k,v in an.items()}
+    print("[5/11] XU100 ve sektör endeksi performansı..."); ip=index_perf(); secidx=sector_index_code(t,p); sip=bist_index_perf(secidx)
+    print("[6/11] BorsaPy/KAP ve 12 çeyreklik mali tablolar analiz ediliyor..."); REPORTS.mkdir(exist_ok=True); hist=build_historical_analysis(sym,p,REPORTS)
+    print("[7/11] Tarihsel büyüme, marj, nakit ve bilanço trendleri birleştiriliyor...")
+    print("[8/11] Kaynaklar arası TTM veri doğrulaması yapılıyor..."); valid=source_validation(an,hist)
+    print("[9/11] Sektör endeksi relatif fiyat görünümü birleştiriliyor...")
+    print("[10/11] Profesyonel rapor hazırlanıyor..."); gen=datetime.now().isoformat(timespec="seconds")
     hp=REPORTS/f"{sym}_report.html"; jp=REPORTS/f"{sym}_report.json"; cp=REPORTS/f"{sym}_universe_snapshot.csv"
-    hp.write_text(html_report(t,p,an,sc,g,xs,ip,cm,gen,hist,valid),encoding="utf-8")
-    jp.write_text(json.dumps(safe({"symbol":sym,"target":t,"profile":p,"metrics":an,"scores":sc,"xu100_count":len(xs),"index_performance":ip,"historical_analysis":hist,"source_validation":valid,"comments":cm,"overall":overall(t,p,sc,ip,hist,valid),"generated_at":gen}),ensure_ascii=False,indent=2),encoding="utf-8")
+    hp.write_text(html_report(t,p,an,sc,g,xs,ip,cm,gen,hist,valid,secidx,sip),encoding="utf-8")
+    jp.write_text(json.dumps(safe({"symbol":sym,"target":t,"profile":p,"metrics":an,"scores":sc,"xu100_count":len(xs),"index_performance":ip,"sector_index":{"code":secidx,"performance":sip},"historical_analysis":hist,"source_validation":valid,"comments":cm,"overall":overall(t,p,sc,ip,hist,valid,secidx,sip),"generated_at":gen}),ensure_ascii=False,indent=2),encoding="utf-8")
     g["all"].to_csv(cp,index=False,encoding="utf-8-sig")
-    print(f"[10/10] Hazır: BIST pay={g.get('raw_count')}, benzersiz şirket={len(g['all'])}, sektör={len(g['sector'])}, endüstri={len(g['industry'])}, XU100={len(xs) if xs else 'N/A'}, veri güveni={valid.get('confidence')}")
+    print(f"[11/11] Hazır: BIST pay={g.get('raw_count')}, benzersiz şirket={len(g['all'])}, sektör={len(g['sector'])}, endüstri={len(g['industry'])}, XU100={len(xs) if xs else 'N/A'}, veri güveni={valid.get('confidence')}")
     print(hp); print(jp); print(cp)
 
 if __name__=="__main__":main()
