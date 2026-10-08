@@ -69,6 +69,7 @@ CASHFLOW_ROWS = {
     "operating_cash_flow": [
         "İşletme Faaliyetlerinden Nakit Akışları",
         "İşletme Faaliyetlerinden Kaynaklanan Nakit Akışları",
+        "İşletme Faaliyetlerinden Kaynaklanan Net Nakit",
         "İşletme Faaliyetlerinden Sağlanan Net Nakit",
         "İşletme Faaliyetlerinden Elde Edilen Nakit Akışları",
         "Faaliyetlerden Elde Edilen Nakit Akışları",
@@ -284,6 +285,19 @@ def _ttm(discrete: pd.Series) -> float | None:
     return float(discrete.dropna().iloc[-4:].sum())
 
 
+def _ttm_yoy(discrete: pd.Series) -> float | None:
+    if discrete is None:
+        return None
+    s=discrete.dropna()
+    if len(s)<8:
+        return None
+    current=float(s.iloc[-4:].sum())
+    previous=float(s.iloc[-8:-4].sum())
+    if previous==0:
+        return None
+    return (current/previous-1.0)*100.0
+
+
 def _positive_count_last4(yoy_map: dict[str, float | None]) -> int | None:
     vals = [v for _, v in sorted(yoy_map.items(), key=lambda kv: _qkey(kv[0]), reverse=True) if v is not None][:4]
     return sum(v > 0 for v in vals) if vals else None
@@ -394,6 +408,11 @@ def _build_commentary(summary: dict[str, Any], profile: str) -> dict[str, Any]:
         (strengths if op_margin_delta > 1 else risks if op_margin_delta < -1 else watch).append(
             f"Faaliyet marjı yıllık {op_margin_delta:+.1f} puan değişti."
         )
+    if net_margin_delta is not None and op_margin_delta is not None and net_margin_delta > 2 and op_margin_delta < -2:
+        risks.append(
+            "Net marj genişlerken faaliyet marjı daralıyor; kâr iyileşmesinin çekirdek operasyon dışı "
+            "kalemlerden de destek aldığı ve bu katkının sürdürülebilirliğinin ayrıca test edilmesi gerektiği görülüyor."
+        )
 
     rev_cagr = summary.get("revenue_cagr_3y")
     ni_cagr = summary.get("net_income_cagr_3y")
@@ -412,9 +431,15 @@ def _build_commentary(summary: dict[str, Any], profile: str) -> dict[str, Any]:
             risks.append(f"TTM faaliyet nakit akışı/net kâr dönüşümü {conv:.2f}x; kârın nakde dönüşümü zayıf.")
         else:
             watch.append(f"TTM faaliyet nakit akışı/net kâr dönüşümü {conv:.2f}x.")
+    capex_to_ocf=summary.get("capex_to_ocf")
     if fcf_margin is not None:
         (strengths if fcf_margin >= 8 else risks if fcf_margin < 0 else watch).append(
             f"TTM serbest nakit akışı marjı {_fmt(fcf_margin,'%')}."
+        )
+    if conv is not None and conv >= 1 and fcf_margin is not None and fcf_margin < 0 and capex_to_ocf is not None:
+        watch.append(
+            f"Faaliyet nakit üretimi güçlü olsa da yatırım harcamaları OCF'nin {capex_to_ocf:.2f} katına ulaşıyor; "
+            "negatif FCF'nin tahsilat zayıflığından mı yoksa büyüme amaçlı yatırım yoğunluğundan mı kaynaklandığı ayrıştırılmalı."
         )
 
     net_debt = summary.get("net_debt")
@@ -569,12 +594,16 @@ def build_historical_analysis(symbol: str, profile: str, report_dir: Path | None
         # Discrete quarters for TTM flow calculation.
         revenue_d = _discrete_from_ytd(revenue)
         net_income_d = _discrete_from_ytd(net_income)
+        gross_profit_d = _discrete_from_ytd(gross_profit)
+        operating_profit_d = _discrete_from_ytd(operating_profit)
         ocf_d = _discrete_from_ytd(cashflow.get("operating_cash_flow", pd.Series(dtype=float)))
         capex_d = _discrete_from_ytd(cashflow.get("capex", pd.Series(dtype=float)))
         fcf_d = _discrete_from_ytd(cashflow.get("free_cash_flow", pd.Series(dtype=float)))
 
         ttm_rev = _ttm(revenue_d)
         ttm_ni = _ttm(net_income_d)
+        ttm_gross_profit = _ttm(gross_profit_d)
+        ttm_operating_profit = _ttm(operating_profit_d)
         ttm_ocf = _ttm(ocf_d)
         ttm_capex = None
         if capex_d is not None and len(capex_d.dropna()) >= 4:
@@ -629,10 +658,16 @@ def build_historical_analysis(symbol: str, profile: str, report_dir: Path | None
             "net_income_cagr_3y": _cagr(annual_ni, 3),
             "ttm_revenue": ttm_rev,
             "ttm_net_income": ttm_ni,
+            "revenue_ttm_yoy": _ttm_yoy(revenue_d),
+            "net_income_ttm_yoy": _ttm_yoy(net_income_d),
+            "ttm_gross_margin": _safe_ratio(ttm_gross_profit, ttm_rev, 100.0),
+            "ttm_operating_margin": _safe_ratio(ttm_operating_profit, ttm_rev, 100.0),
+            "ttm_net_margin": _safe_ratio(ttm_ni, ttm_rev, 100.0),
             "ttm_operating_cash_flow": ttm_ocf,
             "ttm_capex": ttm_capex,
             "ttm_free_cash_flow": ttm_fcf,
             "cash_conversion": _safe_ratio(ttm_ocf, ttm_ni) if ttm_ni is not None and ttm_ni > 0 else None,
+            "capex_to_ocf": _safe_ratio(ttm_capex, ttm_ocf) if ttm_ocf is not None and ttm_ocf > 0 else None,
             "fcf_margin": _safe_ratio(ttm_fcf, ttm_rev, 100.0),
             "cash": cash_now,
             "cash_yoy": _pct_change(cash_now, cash_old),
