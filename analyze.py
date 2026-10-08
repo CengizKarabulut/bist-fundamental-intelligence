@@ -62,14 +62,20 @@ BANDS={
 OVR={
     "Banka":{"pe":("low",5,12),"pb":("low",0.7,2),"roe":("high",12,25),"roa":("high",1,3),"eq_assets":("high",0.06,0.14),"eps_g":("high",0,30),"ni_g":("high",0,30)},
     "Sigorta":{"pe":("low",6,16),"pb":("low",1,3.5),"roe":("high",12,30),"roa":("high",1.5,5)},
+    "Finansal":{"pe":("low",6,18),"pb":("low",0.8,3.5),"roe":("high",10,25),"roa":("high",1.5,6),"eps_g":("high",0,30),"ni_g":("high",0,30)},
     "Savunma/Teknoloji":{"pe":("low",18,55),"pb":("low",2,8),"ev":("low",10,30),"roe":("high",10,25),"roa":("high",4,12),"rev_g":("high",5,40),"eps_g":("high",5,50)},
 }
-BANK_SKIP={"ev","pfcf","roic","gross","opm","ebitdam","rev_g","curr","quick","de","nde","fcfm"}
-INS_SKIP={"ev","pfcf","curr","quick","de","nde","fcfm"}
+FINANCIAL_SKIP={"ev","pfcf","roic","gross","opm","ebitdam","rev_g","curr","quick","de","nde","fcfm","pio"}
+BANK_SKIP=set(FINANCIAL_SKIP)
+INS_SKIP=set(FINANCIAL_SKIP)
+OTHER_FIN_SKIP=set(FINANCIAL_SKIP)
+YORT_SKIP=set(FINANCIAL_SKIP)
 # GYO'larda klasik sanayi değerleme/nakit kalite oranları raporda gösterilebilir
 # ancak NAD/PD-NAD yerine ana skora sokulmaz. Proje geliştirme kaynaklı işletme
 # sermayesi hareketleri FCF ve Net Borç/FAVÖK'ü de aşırı oynatabilir.
 GYO_NONSCORE={"pe","pb","ev","pfcf","eps_g","nde","fcfm","pio"}
+HOLDING_NONSCORE={"pe","pb","ev","pfcf","rev_g","eps_g","gross","opm","ebitdam","nde","fcfm","pio"}
+YORT_NONSCORE={"pe","pb","eps_g","ni_g","netm"}
 
 
 def fnum(v):
@@ -87,22 +93,57 @@ def status(s):
     return "Çok güçlü" if s>=75 else "Güçlü" if s>=60 else "Dengeli" if s>=45 else "Zayıf" if s>=30 else "Çok zayıf"
 
 def profile(r):
-    sec=str(r.get("sector") or "").lower(); ind=str(r.get("industry") or "").lower(); d=str(r.get("description") or r.get("name") or "").lower()
-    if "bank" in ind:return "Banka"
-    if "insurance" in ind:return "Sigorta"
-    if "real estate investment" in ind or "reit" in ind:return "GYO"
-    if "financial conglomerate" in ind or "holding" in d:return "Holding"
-    if any(x in ind for x in ["aerospace","defense","electronic equipment","computer communications"]) or "electronic technology" in sec or "technology services" in sec:return "Savunma/Teknoloji"
+    sec=str(r.get("sector") or "").casefold()
+    ind=str(r.get("industry") or "").casefold()
+    d=str(r.get("description") or r.get("name") or "").casefold()
+
+    # Company-name semantics override broad provider buckets. For example,
+    # brokers sit under "Investment Banks/Brokers" and SAHOL may appear under
+    # "Regional Banks"; a raw "bank" substring therefore creates false banks.
+    if "gayrimenkul yatirim ortakligi" in d or "gayrimenkul yatırım ortaklığı" in d:
+        return "GYO"
+    if "holding" in d:
+        return "Holding"
+    if "real estate investment trust" in ind or ind.strip()=="reit":
+        return "GYO"
+
+    if "insurance" in ind or "sigorta" in d or "hayat ve emeklilik" in d:
+        return "Sigorta"
+
+    bank_name=any(x in d for x in [
+        " bank ", "bank a.", "bankasi", "bankası", "katilim bank",
+        "katılım bank", "kalkinma ve yatirim bank", "kalkınma ve yatırım bank",
+    ]) or d.startswith("akbank") or d.startswith("sekerbank")
+    if bank_name or ind in {"major banks","regional banks"}:
+        return "Banka"
+
+    if "yatirim ortakligi" in d or "yatırım ortaklığı" in d:
+        return "Yatırım Ortaklığı"
+
+    financial_name=any(x in d for x in [
+        "menkul deger", "menkul değer", "faktoring", "finansal kiralama",
+        "tasarruf finansman", "varlik yonetim", "varlık yönetim",
+        "yatirim yonetim", "yatırım yönetim",
+    ])
+    if financial_name or ind in {"investment banks/brokers","investment managers"}:
+        return "Finansal"
+
+    if any(x in ind for x in ["aerospace","defense","electronic equipment","computer communications"]) or "electronic technology" in sec or "technology services" in sec:
+        return "Savunma/Teknoloji"
     return "Genel"
 
 def applicable(k,p):
-    return not (p=="Banka" and k in BANK_SKIP) and not (p=="Sigorta" and k in INS_SKIP)
+    if p=="Banka" and k in BANK_SKIP:return False
+    if p=="Sigorta" and k in INS_SKIP:return False
+    if p=="Finansal" and k in OTHER_FIN_SKIP:return False
+    if p=="Yatırım Ortaklığı" and k in YORT_SKIP:return False
+    return True
 
 def scoreable(k,p):
-    if not applicable(k,p):
-        return False
-    if p=="GYO" and k in GYO_NONSCORE:
-        return False
+    if not applicable(k,p):return False
+    if p=="GYO" and k in GYO_NONSCORE:return False
+    if p=="Holding" and k in HOLDING_NONSCORE:return False
+    if p=="Yatırım Ortaklığı" and k in YORT_NONSCORE:return False
     return True
 
 def band(k,p): return OVR.get(p,{}).get(k) or BANDS.get(k)
@@ -485,6 +526,8 @@ def sector_index_code(t,p):
     if p=="Sigorta":return "XSGRT"
     if p=="GYO":return "XGMYO"
     if p=="Holding":return "XHOLD"
+    if p=="Yatırım Ortaklığı":return "XYORT"
+    if p=="Finansal":return "XUMAL"
     if p=="Savunma/Teknoloji":return "XUTEK"
 
     sec=str(t.get("sector") or "").casefold()
