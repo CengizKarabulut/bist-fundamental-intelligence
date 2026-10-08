@@ -929,6 +929,28 @@ def overall(t,p,s,perf,history=None,validation=None,sector_code=None,sector_perf
 
     return " ".join(words)
 
+def report_readiness(profile,history,validation):
+    reasons=[]
+    level="READY"
+    if not history or history.get("error"):
+        level="PARTIAL"
+        reasons.append("Tarihsel mali tablo katmanı eksik/erişilemez.")
+    sp=(history or {}).get("special_profile_analysis",{}) if isinstance(history,dict) else {}
+    if profile in {"GYO","Holding","Yatırım Ortaklığı"} and sp.get("status")=="NAV_REQUIRED":
+        if level=="READY":
+            level="VALUATION_PARTIAL"
+        reasons.append("Gerçek NAD/portföy NAV verisi olmadığı için özel değerleme tamamlanmadı.")
+    conf=(validation or {}).get("confidence") if isinstance(validation,dict) else None
+    if conf is not None and conf<65:
+        level="REVIEW"
+        reasons.append("Kaynaklar arası veri güveni düşük; ayrışmalar manuel inceleme gerektiriyor.")
+    elif conf is not None and conf<85 and level=="READY":
+        level="READY_WITH_WARNINGS"
+        reasons.append("Bazı kaynak farkları mevcut.")
+    if not reasons:
+        reasons.append("Ana veri, profil ve hesap katmanları kullanılabilir durumda.")
+    return {"status":level,"reasons":reasons}
+
 def scoretxt(v):
     return "N/A" if v is None else f"{v:.0f}/100"
 
@@ -1168,6 +1190,11 @@ def html_report(t,p,a,s,g,xset,perf,comments,gen,history=None,validation=None,se
     e=lambda z:html.escape(str(z)); cards=[]
     for n,v in [("Temel Kalite",s["quality"]),("Değerleme",s["valuation"]),("Bileşik",s["composite"]),("Sektör Relatif",s["rel"]["sector"]["overall"]),("BIST100 Relatif",s["rel"]["xu100"]["overall"]),("Tüm BIST Relatif",s["rel"]["bist"]["overall"])]:
         cards.append(f'<div class="card"><small>{e(n)}</small><b>{e(scoretxt(v))}</b><span>{e(status(v))}</span></div>')
+    readiness=report_readiness(p,history,validation)
+    cards.append(
+        f'<div class="card"><small>Rapor Hazırlık</small><b>{e(readiness["status"])}</b>'
+        f'<span>{e(" ".join(readiness.get("reasons",[])[:1]))}</span></div>'
+    )
     rows=[]; blocks=[]
     for k,x in a.items():
         if x["v"] is None and "A/D" not in str(x.get("source","")):continue
@@ -1283,7 +1310,7 @@ def main():
     print("[10/11] Profesyonel rapor hazırlanıyor..."); gen=datetime.now().isoformat(timespec="seconds")
     hp=REPORTS/f"{sym}_report.html"; jp=REPORTS/f"{sym}_report.json"; cp=REPORTS/f"{sym}_universe_snapshot.csv"
     hp.write_text(html_report(t,p,an,sc,g,xs,ip,cm,gen,hist,valid,secidx,sip),encoding="utf-8")
-    jp.write_text(json.dumps(safe({"symbol":sym,"target":t,"profile":p,"metrics":an,"scores":sc,"xu100_count":len(xs),"index_performance":ip,"sector_index":{"code":secidx,"performance":sip},"historical_analysis":hist,"source_validation":valid,"comments":cm,"overall":overall(t,p,sc,ip,hist,valid,secidx,sip),"generated_at":gen}),ensure_ascii=False,indent=2),encoding="utf-8")
+    jp.write_text(json.dumps(safe({"symbol":sym,"target":t,"profile":p,"metrics":an,"scores":sc,"xu100_count":len(xs),"index_performance":ip,"sector_index":{"code":secidx,"performance":sip},"historical_analysis":hist,"source_validation":valid,"report_readiness":report_readiness(p,hist,valid),"comments":cm,"overall":overall(t,p,sc,ip,hist,valid,secidx,sip),"generated_at":gen}),ensure_ascii=False,indent=2),encoding="utf-8")
     g["all"].to_csv(cp,index=False,encoding="utf-8-sig")
     print(f"[11/11] Hazır: BIST pay={g.get('raw_count')}, benzersiz şirket={len(g['all'])}, sektör={len(g['sector'])}, endüstri={len(g['industry'])}, XU100={len(xs) if xs else 'N/A'}, veri güveni={valid.get('confidence')}")
     print(hp); print(jp); print(cp)
