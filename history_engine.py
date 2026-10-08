@@ -656,6 +656,7 @@ def build_historical_analysis(
         result["financial_group_fallback_used"]=(group != group_candidates[0])
 
         inc_a = pd.DataFrame()
+        bs_a = pd.DataFrame()
         if annual_periods and annual_periods > 0:
             try:
                 inc_a = stock.get_income_stmt(
@@ -665,6 +666,14 @@ def build_historical_analysis(
                 )
             except Exception:
                 inc_a = pd.DataFrame()
+            try:
+                bs_a = stock.get_balance_sheet(
+                    quarterly=False,
+                    financial_group=group,
+                    last_n=max(4,int(annual_periods)),
+                )
+            except Exception:
+                bs_a = pd.DataFrame()
 
         cf_q = pd.DataFrame()
         # UFRS financial institutions do not expose a comparable industrial
@@ -683,6 +692,8 @@ def build_historical_analysis(
                 cf_q.to_csv(report_dir / f"{symbol}_cashflow_{qn}q.csv", encoding="utf-8-sig")
             if not inc_a.empty:
                 inc_a.to_csv(report_dir / f"{symbol}_income_stmt_annual_{max(4,int(annual_periods))}y.csv", encoding="utf-8-sig")
+            if not bs_a.empty:
+                bs_a.to_csv(report_dir / f"{symbol}_balance_sheet_annual_{max(4,int(annual_periods))}y.csv", encoding="utf-8-sig")
 
         found: dict[str, Any] = {}
 
@@ -719,13 +730,19 @@ def build_historical_analysis(
                 if row:
                     found[key] = row
 
-        # Annual series
+        # Annual series for the company's own historical trend.
         annual_rev, annual_rev_row = _find_series(inc_a, INCOME_ROWS["revenue"], quarterly=False)
         annual_ni, annual_ni_row = _find_series(inc_a, INCOME_ROWS["net_income"], quarterly=False)
+        annual_eq, annual_eq_row = _find_series(bs_a, BALANCE_ROWS["equity"], quarterly=False)
+        annual_assets, annual_assets_row = _find_series(bs_a, BALANCE_ROWS["total_assets"], quarterly=False)
         if annual_rev_row:
             found["annual_revenue"] = annual_rev_row
         if annual_ni_row:
             found["annual_net_income"] = annual_ni_row
+        if annual_eq_row:
+            found["annual_equity"] = annual_eq_row
+        if annual_assets_row:
+            found["annual_total_assets"] = annual_assets_row
 
         result["rows_found"] = found
 
@@ -800,6 +817,51 @@ def build_historical_analysis(
         current_ratio_now = _safe_ratio(ca_now, cl_now)
         current_ratio_old = _safe_ratio(ca_old, cl_old)
 
+        # Own-history metrics. ROE/ROA use end-period balances as a robust
+        # approximation because average-equity/average-assets are not guaranteed
+        # to be available consistently across all provider schemas.
+        annual_history=[]
+        annual_years=sorted(
+            set(str(x) for x in annual_rev.index) |
+            set(str(x) for x in annual_ni.index) |
+            set(str(x) for x in annual_eq.index) |
+            set(str(x) for x in annual_assets.index),
+            key=lambda x: int(x) if str(x).isdigit() else 0,
+        )
+        for year in annual_years:
+            rev_a=_num_at(annual_rev,year) if "_num_at" in globals() else None
+            ni_a=_num_at(annual_ni,year) if "_num_at" in globals() else None
+            eq_a=_num_at(annual_eq,year) if "_num_at" in globals() else None
+            assets_a=_num_at(annual_assets,year) if "_num_at" in globals() else None
+            # Inline fallback; keeps compatibility if helper is not present.
+            if rev_a is None and year in annual_rev.index:
+                rev_a=_safe_num(annual_rev[year]) if "_safe_num" in globals() else None
+            if ni_a is None and year in annual_ni.index:
+                ni_a=_safe_num(annual_ni[year]) if "_safe_num" in globals() else None
+            if eq_a is None and year in annual_eq.index:
+                eq_a=_safe_num(annual_eq[year]) if "_safe_num" in globals() else None
+            if assets_a is None and year in annual_assets.index:
+                assets_a=_safe_num(annual_assets[year]) if "_safe_num" in globals() else None
+            # Direct numeric conversion fallback.
+            try: rev_a=float(annual_rev[year]) if year in annual_rev.index and pd.notna(annual_rev[year]) else rev_a
+            except Exception: pass
+            try: ni_a=float(annual_ni[year]) if year in annual_ni.index and pd.notna(annual_ni[year]) else ni_a
+            except Exception: pass
+            try: eq_a=float(annual_eq[year]) if year in annual_eq.index and pd.notna(annual_eq[year]) else eq_a
+            except Exception: pass
+            try: assets_a=float(annual_assets[year]) if year in annual_assets.index and pd.notna(annual_assets[year]) else assets_a
+            except Exception: pass
+            annual_history.append({
+                "year":year,
+                "revenue":rev_a,
+                "net_income":ni_a,
+                "equity":eq_a,
+                "assets":assets_a,
+                "net_margin":_safe_ratio(ni_a,rev_a,100.0),
+                "roe_proxy":_safe_ratio(ni_a,eq_a,100.0),
+                "roa_proxy":_safe_ratio(ni_a,assets_a,100.0),
+            })
+
         summary = {
             "latest_period": latest_period,
             "revenue_yoy": rev_yoy_latest,
@@ -816,6 +878,9 @@ def build_historical_analysis(
             "operating_margin_yoy_pp": _pp_change(om_now, om_old),
             "revenue_cagr_3y": _cagr(annual_rev, 3),
             "net_income_cagr_3y": _cagr(annual_ni, 3),
+            "equity_cagr_3y": _cagr(annual_eq, 3),
+            "assets_cagr_3y": _cagr(annual_assets, 3),
+            "annual_self_history": annual_history,
             "ttm_revenue": ttm_rev,
             "ttm_net_income": ttm_ni,
             "revenue_ttm_yoy": _ttm_yoy(revenue_d),
