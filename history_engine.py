@@ -527,7 +527,14 @@ def _build_commentary(summary: dict[str, Any], profile: str) -> dict[str, Any]:
     return {"paragraphs": paragraphs, "strengths": strengths, "risks": risks, "watch": watch}
 
 
-def build_historical_analysis(symbol: str, profile: str, report_dir: Path | None = None) -> dict[str, Any]:
+def build_historical_analysis(
+    symbol: str,
+    profile: str,
+    report_dir: Path | None = None,
+    quarterly_periods: int = 12,
+    annual_periods: int = 5,
+    load_market_info: bool = True,
+) -> dict[str, Any]:
     """Fetch and analyze selected-stock historical financial statements.
 
     Cross-sectional universe comparisons remain outside this module. This module
@@ -550,11 +557,12 @@ def build_historical_analysis(symbol: str, profile: str, report_dir: Path | None
         # analysis. TradingView quote endpoints can be temporarily unavailable
         # while İş Yatırım financial statements are still accessible.
         info = {}
-        try:
-            info_obj = stock.info
-            info = info_obj.todict() if hasattr(info_obj, "todict") else dict(info_obj)
-        except Exception as exc:
-            result["metadata_warning"] = str(exc)
+        if load_market_info:
+            try:
+                info_obj = stock.info
+                info = info_obj.todict() if hasattr(info_obj, "todict") else dict(info_obj)
+            except Exception as exc:
+                result["metadata_warning"] = str(exc)
 
         result["kap"] = {
             "sector": info.get("sector"),
@@ -573,28 +581,35 @@ def build_historical_analysis(symbol: str, profile: str, report_dir: Path | None
         }
 
         group = "UFRS" if profile == "Banka" else "XI_29"
-        bs_q = stock.get_balance_sheet(quarterly=True, financial_group=group, last_n=12)
-        inc_q = stock.get_income_stmt(quarterly=True, financial_group=group, last_n=12)
-        try:
-            inc_a = stock.get_income_stmt(quarterly=False, financial_group=group, last_n=5)
-        except Exception:
-            inc_a = pd.DataFrame()
+        qn=max(4,int(quarterly_periods))
+        bs_q = stock.get_balance_sheet(quarterly=True, financial_group=group, last_n=qn)
+        inc_q = stock.get_income_stmt(quarterly=True, financial_group=group, last_n=qn)
+        inc_a = pd.DataFrame()
+        if annual_periods and annual_periods > 0:
+            try:
+                inc_a = stock.get_income_stmt(
+                    quarterly=False,
+                    financial_group=group,
+                    last_n=max(4,int(annual_periods)),
+                )
+            except Exception:
+                inc_a = pd.DataFrame()
 
         cf_q = pd.DataFrame()
         if profile != "Banka":
             try:
-                cf_q = stock.get_cashflow(quarterly=True, financial_group=group, last_n=12)
+                cf_q = stock.get_cashflow(quarterly=True, financial_group=group, last_n=qn)
             except Exception:
                 cf_q = pd.DataFrame()
 
         if report_dir:
             report_dir.mkdir(parents=True, exist_ok=True)
-            bs_q.to_csv(report_dir / f"{symbol}_balance_sheet_12q.csv", encoding="utf-8-sig")
-            inc_q.to_csv(report_dir / f"{symbol}_income_stmt_12q.csv", encoding="utf-8-sig")
+            bs_q.to_csv(report_dir / f"{symbol}_balance_sheet_{qn}q.csv", encoding="utf-8-sig")
+            inc_q.to_csv(report_dir / f"{symbol}_income_stmt_{qn}q.csv", encoding="utf-8-sig")
             if not cf_q.empty:
-                cf_q.to_csv(report_dir / f"{symbol}_cashflow_12q.csv", encoding="utf-8-sig")
+                cf_q.to_csv(report_dir / f"{symbol}_cashflow_{qn}q.csv", encoding="utf-8-sig")
             if not inc_a.empty:
-                inc_a.to_csv(report_dir / f"{symbol}_income_stmt_annual_5y.csv", encoding="utf-8-sig")
+                inc_a.to_csv(report_dir / f"{symbol}_income_stmt_annual_{max(4,int(annual_periods))}y.csv", encoding="utf-8-sig")
 
         found: dict[str, Any] = {}
 
