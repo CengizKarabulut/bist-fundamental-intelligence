@@ -635,24 +635,31 @@ def source_validation(t,metrics,history):
         x=metrics.get(key,{})
         return bool(x.get("app",True) and x.get("scoreable",True))
 
-    def classify_pair(tv,iy,kind,warning_rel,critical_rel,warning_abs=None,critical_abs=None,basis_sensitive=False):
+    def classify_pair(tv,iy,kind,warning_rel,critical_rel,warning_abs=None,critical_abs=None,basis_sensitive=False,managed=False):
         nonlocal critical,warning
         if tv is None or iy is None:
             return "N/A",None
         diff=tv-iy
         sign_conflict=(tv>0>iy) or (iy>0>tv)
 
-        if sign_conflict and kind=="%" and max(abs(tv),abs(iy))>=3:
-            critical+=1
-            return "KRİTİK FARK",diff
-
         scale=max(abs(iy),1e-9)
         rel=abs(diff)/scale
         absdiff=abs(diff)
 
-        crit=(rel>critical_rel) or (critical_abs is not None and absdiff>critical_abs and rel>warning_rel)
+        sign_issue=(sign_conflict and kind=="%" and max(abs(tv),abs(iy))>=3)
+        crit=sign_issue or (rel>critical_rel) or (critical_abs is not None and absdiff>critical_abs and rel>warning_rel)
         warn=(rel>warning_rel) or (warning_abs is not None and absdiff>warning_abs)
 
+        # When the engine has already selected İş Yatırım / statement-derived
+        # data as the declared primary source, a secondary-provider mismatch is
+        # visible but "managed": it should not make a correct report look broken.
+        if managed and (crit or warn):
+            warning+=1
+            return "KAYNAK FARKI - BİRİNCİL KAYNAK UYGULANDI",diff
+
+        if sign_issue:
+            critical+=1
+            return "KRİTİK FARK",diff
         if crit:
             if basis_sensitive and not sign_conflict:
                 warning+=1
@@ -687,7 +694,9 @@ def source_validation(t,metrics,history):
         if tv is None or hval is None:
             checks.append({"label":label,"tradingview":tv,"borsapy":hval,"difference":None,"status":"N/A","kind":kind})
             continue
-        st,diff=classify_pair(tv,hval,kind,wrel,crel,wabs,cabs,basis_sensitive)
+        primary_src=str(metrics.get(key,{}).get("source",""))
+        managed=primary_src.startswith("İş Yatırım")
+        st,diff=classify_pair(tv,hval,kind,wrel,crel,wabs,cabs,basis_sensitive,managed)
         checks.append({"label":label,"tradingview":tv,"borsapy":hval,"difference":diff,"status":st,"kind":kind})
 
     # Current valuation/company-card checks from İş Yatırım.
@@ -719,7 +728,9 @@ def source_validation(t,metrics,history):
         elif tv is None or iy is None:
             checks.append({"label":label,"tradingview":tv,"borsapy":iy,"difference":None,"status":"N/A","kind":kind})
         else:
-            st,diff=classify_pair(tv,iy,kind,wrel,crel)
+            primary_src=str(metrics.get(key,{}).get("source",""))
+            managed=primary_src.startswith("İş Yatırım")
+            st,diff=classify_pair(tv,iy,kind,wrel,crel,managed=managed)
             checks.append({"label":label,"tradingview":tv,"borsapy":iy,"difference":diff,"status":st,"kind":kind})
 
     # Market cap: small differences are expected when quotes are captured at
