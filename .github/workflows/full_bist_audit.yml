@@ -7,6 +7,8 @@ on:
     paths:
       - "analyze.py"
       - "history_engine.py"
+      - "special_profiles.py"
+      - "data/nav_inputs.csv"
       - "audit_all.py"
       - "audit_merge.py"
       - "requirements.txt"
@@ -35,7 +37,7 @@ jobs:
       - name: Bağımlılıkları kur
         run: pip install -r requirements.txt
       - name: Sözdizimi kontrolü
-        run: python -m py_compile analyze.py history_engine.py audit_all.py audit_merge.py
+        run: python -m py_compile analyze.py history_engine.py special_profiles.py audit_all.py audit_merge.py
       - name: Tüm BIST shard audit
         run: python audit_all.py --shard-index ${{ matrix.shard }} --shard-count 8 --quarterly 8
       - name: Shard sonucunu yükle
