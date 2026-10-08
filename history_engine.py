@@ -8,6 +8,7 @@ from typing import Any
 
 import pandas as pd
 import borsapy as bp
+from special_profiles import build_special_profile_analysis
 
 
 INCOME_ROWS = {
@@ -873,6 +874,14 @@ def build_historical_analysis(
         )
 
         result["summary"] = summary
+        result["special_profile_analysis"] = build_special_profile_analysis(
+            symbol=symbol,
+            profile=profile,
+            inc_q=inc_q,
+            bs_q=bs_q,
+            market=result.get("market",{}),
+            summary=summary,
+        )
 
         # Detail table: newest first, maximum 8 periods for report readability.
         if profile == "Banka":
