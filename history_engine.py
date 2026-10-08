@@ -413,6 +413,28 @@ def _build_commentary(summary: dict[str, Any], profile: str) -> dict[str, Any]:
             )
         return {"paragraphs": paragraphs, "strengths": strengths, "risks": risks, "watch": watch}
 
+    if profile in {"Sigorta","Finansal"}:
+        if ni_yoy is not None:
+            paragraphs.append(
+                f"{latest_period or 'Son dönem'} net kârı yıllık {_fmt(ni_yoy,'%')} değişti."
+            )
+            (strengths if ni_yoy>15 else risks if ni_yoy<0 else watch).append(
+                f"Net kâr yıllık değişimi {_fmt(ni_yoy,'%')}."
+            )
+        eq_yoy=summary.get("equity_yoy")
+        assets_yoy=summary.get("assets_yoy")
+        if eq_yoy is not None or assets_yoy is not None:
+            paragraphs.append(
+                f"Özkaynak büyümesi {_fmt(eq_yoy,'%')}, aktif büyümesi {_fmt(assets_yoy,'%')}. "
+                f"{profile} profili sanayi şirketi FAVÖK/FCF ve işletme sermayesi metrikleriyle zorlanmadı."
+            )
+        eq_assets=summary.get("equity_to_assets")
+        if eq_assets is not None:
+            (strengths if eq_assets>=10 else risks if eq_assets<7 else watch).append(
+                f"Özkaynak/aktif oranı {_fmt(eq_assets,'%')}."
+            )
+        return {"paragraphs": paragraphs, "strengths": strengths, "risks": risks, "watch": watch}
+
     if rev_yoy is not None or ni_yoy is not None:
         paragraphs.append(
             f"{latest_period or 'Son dönem'} finansallarında ciro yıllık {_fmt(rev_yoy,'%')}, "
@@ -597,10 +619,40 @@ def build_historical_analysis(
             "dividend_yield": info.get("dividendYield"),
         }
 
-        group = "UFRS" if profile == "Banka" else "XI_29"
+        # İş Yatırım exposes two statement schemas. Banks, insurers and
+        # non-bank financial institutions are generally reported in UFRS; some
+        # symbols/providers can still be available only in XI_29. Try the
+        # economically appropriate schema first and fall back instead of failing
+        # the whole report.
+        financial_profiles={"Banka","Sigorta","Finansal"}
+        group_candidates=["UFRS","XI_29"] if profile in financial_profiles else ["XI_29","UFRS"]
         qn=max(4,int(quarterly_periods))
-        bs_q = stock.get_balance_sheet(quarterly=True, financial_group=group, last_n=qn)
-        inc_q = stock.get_income_stmt(quarterly=True, financial_group=group, last_n=qn)
+        bs_q=pd.DataFrame()
+        inc_q=pd.DataFrame()
+        group=None
+        group_errors=[]
+        for candidate in group_candidates:
+            try:
+                bs_try=stock.get_balance_sheet(quarterly=True, financial_group=candidate, last_n=qn)
+                inc_try=stock.get_income_stmt(quarterly=True, financial_group=candidate, last_n=qn)
+                if bs_try is not None and inc_try is not None and not bs_try.empty and not inc_try.empty:
+                    bs_q=bs_try
+                    inc_q=inc_try
+                    group=candidate
+                    break
+                group_errors.append(f"{candidate}: empty")
+            except Exception as exc:
+                group_errors.append(f"{candidate}: {exc}")
+
+        if group is None:
+            raise RuntimeError(
+                "No financial data available; tried "
+                + " | ".join(group_errors)
+            )
+
+        result["financial_group_used"]=group
+        result["financial_group_fallback_used"]=(group != group_candidates[0])
+
         inc_a = pd.DataFrame()
         if annual_periods and annual_periods > 0:
             try:
@@ -613,7 +665,9 @@ def build_historical_analysis(
                 inc_a = pd.DataFrame()
 
         cf_q = pd.DataFrame()
-        if profile != "Banka":
+        # UFRS financial institutions do not expose a comparable industrial
+        # cash-flow statement in BorsaPy. Do not turn that absence into a failure.
+        if group=="XI_29" and profile not in financial_profiles:
             try:
                 cf_q = stock.get_cashflow(quarterly=True, financial_group=group, last_n=qn)
             except Exception:
@@ -868,21 +922,25 @@ def build_historical_analysis(
             rows.append(row)
         result["quarterly"] = rows
 
-        core_keys = (
-            ["net_income", "total_assets", "equity", "loans", "deposits"]
-            if profile == "Banka"
-            else ["revenue", "net_income", "total_assets", "equity"]
-        )
+        if profile=="Banka":
+            core_keys=["net_income","total_assets","equity","loans","deposits"]
+        elif profile in {"Sigorta","Finansal"}:
+            # Revenue/cash-flow definitions are not comparable with industrial
+            # companies. Require profit + balance-sheet anchors instead.
+            core_keys=["net_income","total_assets","equity"]
+        else:
+            core_keys=["revenue","net_income","total_assets","equity"]
+
         found_core = sum(1 for k in core_keys if k in found)
-        found_cash = sum(
-            1 for k in ["operating_cash_flow", "capex"] if k in found
-        )
+        found_cash = sum(1 for k in ["operating_cash_flow","capex"] if k in found)
         result["data_quality"] = {
             "core_rows_found": found_core,
             "core_rows_expected": len(core_keys),
-            "cashflow_rows_found": found_cash if profile != "Banka" else None,
+            "cashflow_rows_found": found_cash if group=="XI_29" and profile not in financial_profiles else None,
             "quarterly_periods": len(latest_periods),
             "annual_periods": max(len(annual_rev), len(annual_ni)),
+            "financial_group_used": group,
+            "financial_group_fallback_used": result.get("financial_group_fallback_used",False),
         }
 
         result["commentary"] = _build_commentary(summary, profile)
