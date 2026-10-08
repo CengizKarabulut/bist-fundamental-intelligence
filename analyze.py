@@ -93,6 +93,8 @@ def status(s):
     if s is None:return "N/A"
     return "Çok güçlü" if s>=75 else "Güçlü" if s>=60 else "Dengeli" if s>=45 else "Zayıf" if s>=30 else "Çok zayıf"
 
+OPERATING_XHOLD_OVERRIDES={"TAVHL","SISE"}
+
 @lru_cache(maxsize=16)
 def _official_members(code):
     try:
