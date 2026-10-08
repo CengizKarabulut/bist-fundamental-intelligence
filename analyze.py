@@ -529,44 +529,78 @@ def history_html(history):
     q=history.get("quarterly",[])
     comm=history.get("commentary",{})
     dq=history.get("data_quality",{})
+    prof=history.get("profile","")
 
-    cards=[
-        ("Son Rapor",h.get("latest_period") or "N/A",""),
-        ("Ciro YoY",_hist_num(h.get("revenue_yoy"),"%"),""),
-        ("Net Kâr YoY",_hist_num(h.get("net_income_yoy"),"%"),""),
-        ("Net Marj",_hist_num(h.get("net_margin"),"%"),""),
-        ("Nakit Dönüşümü",_hist_num(h.get("cash_conversion"),"x",2),""),
-        ("FCF Marjı",_hist_num(h.get("fcf_margin"),"%"),""),
-        ("Net Borç",_hist_money(h.get("net_debt")),""),
-        ("3Y Ciro CAGR",_hist_num(h.get("revenue_cagr_3y"),"%"),""),
-    ]
+    if prof=="Banka":
+        cards=[
+            ("Son Rapor",h.get("latest_period") or "N/A",""),
+            ("Net Kâr YoY",_hist_num(h.get("net_income_yoy"),"%"),""),
+            ("Net Faiz Geliri YoY",_hist_num(h.get("net_interest_income_yoy"),"%"),""),
+            ("Ücret/Komisyon YoY",_hist_num(h.get("fee_income_yoy"),"%"),""),
+            ("Kredi Büyümesi",_hist_num(h.get("loans_yoy"),"%"),""),
+            ("Mevduat Büyümesi",_hist_num(h.get("deposits_yoy"),"%"),""),
+            ("Özkaynak Büyümesi",_hist_num(h.get("equity_yoy"),"%"),""),
+            ("Özkaynak/Aktif",_hist_num(h.get("equity_to_assets"),"%"),""),
+        ]
+    else:
+        cards=[
+            ("Son Rapor",h.get("latest_period") or "N/A",""),
+            ("Ciro YoY",_hist_num(h.get("revenue_yoy"),"%"),""),
+            ("Net Kâr YoY",_hist_num(h.get("net_income_yoy"),"%"),""),
+            ("Net Marj",_hist_num(h.get("net_margin"),"%"),""),
+            ("Nakit Dönüşümü",_hist_num(h.get("cash_conversion"),"x",2),""),
+            ("FCF Marjı",_hist_num(h.get("fcf_margin"),"%"),""),
+            ("Net Borç",_hist_money(h.get("net_debt")),""),
+            ("3Y Ciro CAGR",_hist_num(h.get("revenue_cagr_3y"),"%"),""),
+        ]
+
     cards_html="".join(
         f'<div class="card"><small>{e(n)}</small><b>{e(v)}</b><span>{e(s)}</span></div>'
         for n,v,s in cards
     )
 
     rows=[]
-    for r in q:
-        rows.append(
-            "<tr>"
-            f"<td>{e(r.get('period',''))}</td>"
-            f"<td>{e(_hist_money(r.get('revenue')))}</td>"
-            f"<td>{e(_hist_num(r.get('revenue_yoy'),'%'))}</td>"
-            f"<td>{e(_hist_money(r.get('net_income')))}</td>"
-            f"<td>{e(_hist_num(r.get('net_income_yoy'),'%'))}</td>"
-            f"<td>{e(_hist_num(r.get('operating_margin'),'%'))}</td>"
-            f"<td>{e(_hist_num(r.get('net_margin'),'%'))}</td>"
-            f"<td>{e(_hist_money(r.get('operating_cash_flow_discrete')))}</td>"
-            "</tr>"
+    if prof=="Banka":
+        for r in q:
+            rows.append(
+                "<tr>"
+                f"<td>{e(r.get('period',''))}</td>"
+                f"<td>{e(_hist_money(r.get('net_interest_income')))}</td>"
+                f"<td>{e(_hist_money(r.get('fee_income')))}</td>"
+                f"<td>{e(_hist_money(r.get('net_income')))}</td>"
+                f"<td>{e(_hist_num(r.get('net_income_yoy'),'%'))}</td>"
+                f"<td>{e(_hist_money(r.get('loans')))}</td>"
+                f"<td>{e(_hist_money(r.get('deposits')))}</td>"
+                "</tr>"
+            )
+        header=(
+            '<tr><th>Dönem</th><th>Net Faiz Geliri/YTD</th><th>Net Ücret-Komisyon/YTD</th>'
+            '<th>Net Kâr/YTD</th><th>Net Kâr YoY</th><th>Krediler</th><th>Mevduat</th></tr>'
+        )
+    else:
+        for r in q:
+            rows.append(
+                "<tr>"
+                f"<td>{e(r.get('period',''))}</td>"
+                f"<td>{e(_hist_money(r.get('revenue')))}</td>"
+                f"<td>{e(_hist_num(r.get('revenue_yoy'),'%'))}</td>"
+                f"<td>{e(_hist_money(r.get('net_income')))}</td>"
+                f"<td>{e(_hist_num(r.get('net_income_yoy'),'%'))}</td>"
+                f"<td>{e(_hist_num(r.get('operating_margin'),'%'))}</td>"
+                f"<td>{e(_hist_num(r.get('net_margin'),'%'))}</td>"
+                f"<td>{e(_hist_money(r.get('operating_cash_flow_discrete')))}</td>"
+                "</tr>"
+            )
+        header=(
+            '<tr><th>Dönem</th><th>Ciro/YTD</th><th>Ciro YoY</th><th>Net Kâr/YTD</th>'
+            '<th>Net Kâr YoY</th><th>Faaliyet Marjı</th><th>Net Marj</th><th>Çeyreklik OCF</th></tr>'
         )
 
     def list_html(items,cls):
         if not items:return ""
         return f'<div class="note {cls}"><ul>'+"".join(f"<li>{e(x)}</li>" for x in items)+"</ul></div>"
 
-    paragraphs="".join(
-        f"<p>{e(x)}</p>" for x in comm.get("paragraphs",[])
-    )
+    paragraphs="".join(f"<p>{e(x)}</p>" for x in comm.get("paragraphs",[]))
     quality=(
         f"Çekirdek satır kapsaması {dq.get('core_rows_found','N/A')}/{dq.get('core_rows_expected','N/A')} · "
         f"Çeyrek sayısı {dq.get('quarterly_periods','N/A')} · "
@@ -583,10 +617,7 @@ def history_html(history):
         +list_html(comm.get("risks",[]),"negative")
         +list_html(comm.get("watch",[]),"")
         +'</div>'
-        '<div class="table"><table><tr>'
-        '<th>Dönem</th><th>Ciro/YTD</th><th>Ciro YoY</th><th>Net Kâr/YTD</th>'
-        '<th>Net Kâr YoY</th><th>Faaliyet Marjı</th><th>Net Marj</th><th>Çeyreklik OCF</th>'
-        '</tr>'+''.join(rows)+'</table></div>'
+        '<div class="table"><table>'+header+''.join(rows)+'</table></div>'
     )
 
 def html_report(t,p,a,s,g,xset,perf,comments,gen,history=None,validation=None,sector_code=None,sector_perf=None):
