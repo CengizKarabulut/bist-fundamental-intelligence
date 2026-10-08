@@ -184,7 +184,64 @@ def entity(r):
     s=re.sub(r"\b(class|series)\s+[a-z0-9]+\b","",s); s=re.sub(r"\b[a-z]\s+grubu\b","",s)
     return re.sub(r"\s+"," ",s).strip(" -.,")
 
-def universe():
+IY_PRIMARY_MAP={
+    "pe":("iy_pe","pe"),
+    "pb":("iy_pb","pb"),
+    "ev":("iy_ev_ebitda","ev_ebitda"),
+    "roe":("iy_roe","roe"),
+    "roa":("iy_roa","roa"),
+}
+
+
+def _iy_screen_value(row,*keys):
+    for key in keys:
+        if key in row.index and pd.notna(row[key]):
+            return fnum(row[key])
+    return None
+
+
+@lru_cache(maxsize=1)
+def _isyatirim_cross_section_records():
+    """A few bulk İş Yatırım screener calls, cached for the process lifetime."""
+    merged={}
+    specs=[
+        ("market_cap",0,5_000_000,"iy_market_cap",("market_cap","criteria_8"),1_000_000.0),
+        ("pe",-1000,10000,"iy_pe",("pe","criteria_28","pe_ratio"),1.0),
+        ("pb",-100,1000,"iy_pb",("pb","criteria_30","pb_ratio"),1.0),
+        ("ev_ebitda",-100,1000,"iy_ev_ebitda",("ev_ebitda","criteria_29"),1.0),
+        ("roe",-200,500,"iy_roe",("roe","criteria_422"),1.0),
+        ("roa",-200,500,"iy_roa",("roa","criteria_423"),1.0),
+    ]
+    for crit,lo,hi,outkey,candidates,mult in specs:
+        try:
+            d=bp.Screener().add_filter(crit,min=lo,max=hi,required=False).run()
+        except Exception:
+            continue
+        if d is None or d.empty or "symbol" not in d.columns:
+            continue
+        for _,row in d.iterrows():
+            sym=str(row["symbol"]).upper()
+            item=merged.setdefault(sym,{})
+            v=_iy_screen_value(row,*candidates)
+            item[outkey]=v*mult if v is not None else None
+            if outkey=="iy_market_cap":
+                item["iy_market_available"]=True
+    return merged
+
+
+def enrich_isyatirim_cross_section(df):
+    records=_isyatirim_cross_section_records()
+    if not records:
+        return df
+    out=df.copy()
+    extra=pd.DataFrame.from_dict(records,orient="index")
+    extra.index.name="symbol"
+    out=out.merge(extra.reset_index(),on="symbol",how="left")
+    out["iy_market_available"]=out.get("iy_market_available",False).fillna(False).astype(bool)
+    return out
+
+
+def universe(include_isyatirim=False):
     _,df=(Query().select(*FIELDS).set_markets("turkey").where(col("exchange")=="BIST",col("type")=="stock").order_by("market_cap_basic",ascending=False,nulls_first=False).limit(1000).get_scanner_data())
     if df is None or df.empty: raise RuntimeError("BIST evreni alınamadı")
     df=df.copy()
@@ -195,6 +252,8 @@ def universe():
     non_equity=desc.str.contains(r"certificate|sertifika",case=False,regex=True,na=False)
     df=df.loc[~non_equity].copy()
     df["symbol"]=df["ticker"].map(symbol)
+    if include_isyatirim:
+        df=enrich_isyatirim_cross_section(df)
     return df
 
 def xu100(u):
@@ -227,8 +286,22 @@ def dedupe(df):
 
 def vals(df,k):
     fld=M[k][0]
-    if df.empty or fld not in df:return pd.Series(dtype=float)
-    s=pd.to_numeric(df[fld],errors="coerce").dropna().astype(float)
+    if df.empty:return pd.Series(dtype=float)
+
+    iy_info=IY_PRIMARY_MAP.get(k)
+    if iy_info and iy_info[0] in df.columns and "iy_market_available" in df.columns:
+        iy_col=iy_info[0]
+        primary=pd.to_numeric(df[iy_col],errors="coerce")
+        fallback=pd.to_numeric(df[fld],errors="coerce") if fld in df.columns else pd.Series(index=df.index,dtype=float)
+        available=df["iy_market_available"].fillna(False).astype(bool)
+        # When İş Yatırım covers the symbol but the ratio is absent, preserve
+        # that absence (often A/D) rather than resurrecting another provider's ratio.
+        combined=fallback.where(~available,primary)
+        s=combined.dropna().astype(float)
+    else:
+        if fld not in df:return pd.Series(dtype=float)
+        s=pd.to_numeric(df[fld],errors="coerce").dropna().astype(float)
+
     if k in {"pe","pb","ev","pfcf"}:s=s[s>0]
     return s
 
@@ -260,16 +333,25 @@ def groups(u,t,xset):
 def analyze(t,p,g):
     out={}
     for k,(fld,label,cat,direction,kind,weight) in M.items():
-        v=fnum(t.get(fld))
+        tv_v=fnum(t.get(fld))
+        iy_info=IY_PRIMARY_MAP.get(k)
+        iy_available=bool(t.get("iy_market_available",False)) if "iy_market_available" in t.index else False
+        if iy_info and iy_available:
+            v=fnum(t.get(iy_info[0]))
+            source="İş Yatırım" if v is not None else "İş Yatırım (A/D)"
+        else:
+            v=tv_v
+            source="TradingView"
+
         app=applicable(k,p)
         scr=scoreable(k,p)
-        a=abs_score(v,band(k,p)) if scr else None
+        a=abs_score(v,band(k,p)) if scr and v is not None else None
         gs={}
         for n in ["industry","sector","xu100","bist"]:
-            gs[n]={"median":med(g[n],k),"pct":pct(g[n],k,v) if app else None,"n":len(vals(g[n],k))}
+            gs[n]={"median":med(g[n],k),"pct":pct(g[n],k,v) if app and v is not None else None,"n":len(vals(g[n],k))}
         out[k]={
             "label":label,"cat":cat,"dir":direction,"kind":kind,"w":weight,
-            "v":v,"raw_v":v,"source":"TradingView","app":app,"scoreable":scr,
+            "v":v,"raw_v":tv_v,"source":source,"app":app,"scoreable":scr,
             "abs":a,"groups":gs
         }
     return out
@@ -389,8 +471,9 @@ def factor_comment(x,p):
             s+=f" TradingView {name} medyanı {fmt(pr['median'],x['kind'])}; göreli konum {pr['pct']:.0f}/100."
         return s
 
+    source_note=f" ({source})" if source!="TradingView" else ""
     s=(
-        f"{x['label']} {fmt(x['v'],x['kind'])}. Mutlak değerlendirme "
+        f"{x['label']} {fmt(x['v'],x['kind'])}{source_note}. Mutlak değerlendirme "
         f"{status(x['abs']).lower()} ({ref_text(next(k for k,v in M.items() if v[1]==x['label']),p)})."
     )
     if pr["median"] is not None and pr["n"]>=3:
@@ -1066,7 +1149,7 @@ def safe(v):
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("symbol"); a=ap.parse_args(); sym=a.symbol.upper().replace("BIST:","").replace(".IS","").strip()
-    print("[1/11] Tüm BIST evreni alınıyor..."); u=universe(); h=u[u.symbol==sym]
+    print("[1/11] Tüm BIST + İş Yatırım karşılaştırma evreni alınıyor..."); u=universe(include_isyatirim=True); h=u[u.symbol==sym]
     if h.empty:raise SystemExit(f"{sym} bulunamadı")
     t=h.iloc[0].copy(); t["symbol"]=sym; p=profile(t)
     print("[2/11] BIST100 üyeleri alınıyor..."); xs=xu100(u)
