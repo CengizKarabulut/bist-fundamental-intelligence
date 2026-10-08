@@ -365,14 +365,41 @@ def wavg(items):
     q=[(s,w) for s,w in items if s is not None and w>0]
     return sum(s*w for s,w in q)/sum(w for _,w in q) if q else None
 
-def groups(u,t,xset):
-    du=dedupe(u); e=entity(t); p=du[du.apply(entity,axis=1)!=e]
+PROFILE_BENCHMARK_INDEX={
+    "Banka":"XBANK",
+    "GYO":"XGMYO",
+    "Sigorta":"XSGRT",
+    "Holding":"XHOLD",
+    "Yatırım Ortaklığı":"XYORT",
+}
+
+def groups(u,t,xset,profile_name=None):
+    du=dedupe(u); e=entity(t); peers=du[du.apply(entity,axis=1)!=e]
     sec=str(t.get("sector") or ""); ind=str(t.get("industry") or "")
+    profile_name=profile_name or profile(t)
+
+    # Generic vendor "sector=Finance" is too broad for banks/GYOs/insurers/
+    # holdings. For these business models, the official BIST sector/index
+    # membership is the economically coherent comparison universe.
+    benchmark_code=PROFILE_BENCHMARK_INDEX.get(profile_name)
+    official=_official_members(benchmark_code) if benchmark_code else frozenset()
+    if official:
+        sector_group=peers[peers["symbol"].isin(official)]
+        sector_label=benchmark_code
+    else:
+        sector_group=(
+            peers[peers["sector"].astype(str).str.casefold()==sec.casefold()]
+            if sec else peers.iloc[0:0]
+        )
+        sector_label=sec or "N/A"
+
     return {
-        "industry":p[p["industry"].astype(str).str.casefold()==ind.casefold()] if ind else p.iloc[0:0],
-        "sector":p[p["sector"].astype(str).str.casefold()==sec.casefold()] if sec else p.iloc[0:0],
-        "xu100":p[p["symbol"].isin(xset)] if xset else p.iloc[0:0],
-        "bist":p,
+        "industry":peers[peers["industry"].astype(str).str.casefold()==ind.casefold()] if ind else peers.iloc[0:0],
+        "sector":sector_group,
+        "sector_label":sector_label,
+        "sector_benchmark_code":benchmark_code if official else None,
+        "xu100":peers[peers["symbol"].isin(xset)] if xset else peers.iloc[0:0],
+        "bist":peers,
         "all":du,
         "raw_count":len(u),
     }
@@ -1406,7 +1433,7 @@ def html_report(t,p,a,s,g,xset,perf,comments,gen,history=None,validation=None,se
             f"<td>{fmt(sip,'%')}</td><td>{'N/A' if sal is None else f'{sal:+.2f} puan'}</td></tr>"
         )
     sec=str(t.get('sector') or 'N/A'); ind=str(t.get('industry') or 'N/A'); name=str(t.get('description') or t.get('name') or t['symbol'])
-    return f'''<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(t['symbol'])} — BIST Fundamental Intelligence</title><style>body{{font-family:Arial;background:#0d1117;color:#e6edf3;margin:0;line-height:1.5}}main{{max-width:1500px;margin:auto;padding:28px}}small{{display:block;color:#8b949e}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}.card,section,.note{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px}}.card b{{display:block;font-size:26px}}.table{{overflow:auto;margin:18px 0}}table{{width:100%;min-width:1100px;border-collapse:collapse;background:#161b22}}th,td{{padding:9px;border:1px solid #30363d;text-align:right;vertical-align:top}}th:first-child,td:first-child{{text-align:left}}th{{background:#21262d}}section{{margin:10px 0}}section h3{{margin:0 0 6px;font-size:16px}}section p{{margin:0}}.note{{border-left:4px solid #d29922}}.expert{{border-left-color:#3fb950}}</style></head><body><main><h1>{e(t['symbol'])} — Fundamental Intelligence Report</h1><p>{e(name)} · Motor: {e(__version__)} ({e(ENGINE_STAGE)}) · Profil: {e(p)} · Sektör: {e(sec)} · Endüstri: {e(ind)} · {e(gen)}</p><div class="grid">{''.join(cards)}</div><h2>Profesyonel Genel Değerlendirme</h2><div class="note expert">{e(overall(t,p,s,perf,history,validation,sector_code,sector_perf))}</div>{special_profile_html(history)}{history_html(history)}{validation_html(validation)}<h2>Kategori Özeti</h2><div class="table"><table><tr><th>Kategori</th><th>Mutlak</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(cr)}</table></div><h2>Tüm Finansal Faktörler</h2><div class="note"><b>Veri otoritesi:</b> hedef hissede İş Yatırım tarafından sağlanan F/K, PD/DD, FD/FAVÖK, ROE ve ROA önceliklidir; diğer çapraz-kesit metrikleri TradingView'den gelir. Tarihsel mali tablolar BorsaPy/İş Yatırım katmanından alınır. Kaynaklar ayrışırsa fark gizlenmez. Karşılaştırma sabit emsal sayısıyla değil, güncel endüstri/sektör, BIST100 ve tüm BIST dağılımlarıyla yapılır.</div><div class="table"><table><tr><th>Metrik</th><th>{e(t['symbol'])}</th><th>Kaynak</th><th>Mutlak</th><th>Endüstri</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(rows)}</table></div><h2>Faktör Bazlı Uzman Yorumları</h2>{''.join(blocks)}<h2>Endeks ve Sektör Fiyat Relatif Performansı</h2><div class="table"><table><tr><th>Dönem</th><th>{e(t['symbol'])}</th><th>XU100</th><th>XU100 Alfa</th><th>{e(sector_code or 'Sektör Endeksi N/A')}</th><th>Sektör Alfa</th></tr>{''.join(pr)}</table></div><h2>Kapsam</h2><div class="grid"><div class="card"><small>BIST Pay/Kotasyon</small><b>{g.get('raw_count','N/A')}</b></div><div class="card"><small>Benzersiz BIST Şirketi</small><b>{len(g['all'])}</b></div><div class="card"><small>Sektör</small><b>{len(g['sector'])}</b><span>{e(sec)}</span></div><div class="card"><small>Endüstri</small><b>{len(g['industry'])}</b><span>{e(ind)}</span></div><div class="card"><small>BIST100 üyeleri</small><b>{len(xset) if xset else 'N/A'}</b></div></div><p class="note">Eksik veri uydurulmaz. Mutlak referans bantları evrensel kesinlik değil, finansal oran mantığı + profil kalibrasyonudur. GYO/Holding için PD/DD gerçek NAD iskontosu değildir. Araştırma amaçlıdır; yatırım tavsiyesi değildir.</p></main></body></html>'''
+    return f'''<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(t['symbol'])} — BIST Fundamental Intelligence</title><style>body{{font-family:Arial;background:#0d1117;color:#e6edf3;margin:0;line-height:1.5}}main{{max-width:1500px;margin:auto;padding:28px}}small{{display:block;color:#8b949e}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}.card,section,.note{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px}}.card b{{display:block;font-size:26px}}.table{{overflow:auto;margin:18px 0}}table{{width:100%;min-width:1100px;border-collapse:collapse;background:#161b22}}th,td{{padding:9px;border:1px solid #30363d;text-align:right;vertical-align:top}}th:first-child,td:first-child{{text-align:left}}th{{background:#21262d}}section{{margin:10px 0}}section h3{{margin:0 0 6px;font-size:16px}}section p{{margin:0}}.note{{border-left:4px solid #d29922}}.expert{{border-left-color:#3fb950}}</style></head><body><main><h1>{e(t['symbol'])} — Fundamental Intelligence Report</h1><p>{e(name)} · Motor: {e(__version__)} ({e(ENGINE_STAGE)}) · Profil: {e(p)} · Sektör: {e(sec)} · Endüstri: {e(ind)} · {e(gen)}</p><div class="grid">{''.join(cards)}</div><h2>Profesyonel Genel Değerlendirme</h2><div class="note expert">{e(overall(t,p,s,perf,history,validation,sector_code,sector_perf))}</div>{special_profile_html(history)}{history_html(history)}{validation_html(validation)}<h2>Kategori Özeti</h2><div class="table"><table><tr><th>Kategori</th><th>Mutlak</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(cr)}</table></div><h2>Tüm Finansal Faktörler</h2><div class="note"><b>Veri otoritesi:</b> hedef hissede İş Yatırım tarafından sağlanan F/K, PD/DD, FD/FAVÖK, ROE ve ROA önceliklidir; diğer çapraz-kesit metrikleri TradingView'den gelir. Tarihsel mali tablolar BorsaPy/İş Yatırım katmanından alınır. Kaynaklar ayrışırsa fark gizlenmez. Karşılaştırma sabit emsal sayısıyla değil, güncel endüstri/sektör, BIST100 ve tüm BIST dağılımlarıyla yapılır.</div><div class="table"><table><tr><th>Metrik</th><th>{e(t['symbol'])}</th><th>Kaynak</th><th>Mutlak</th><th>Endüstri</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(rows)}</table></div><h2>Faktör Bazlı Uzman Yorumları</h2>{''.join(blocks)}<h2>Endeks ve Sektör Fiyat Relatif Performansı</h2><div class="table"><table><tr><th>Dönem</th><th>{e(t['symbol'])}</th><th>XU100</th><th>XU100 Alfa</th><th>{e(sector_code or 'Sektör Endeksi N/A')}</th><th>Sektör Alfa</th></tr>{''.join(pr)}</table></div><h2>Kapsam</h2><div class="grid"><div class="card"><small>BIST Pay/Kotasyon</small><b>{g.get('raw_count','N/A')}</b></div><div class="card"><small>Benzersiz BIST Şirketi</small><b>{len(g['all'])}</b></div><div class="card"><small>Sektör / Profil Benchmark</small><b>{len(g['sector'])}</b><span>{e(g.get('sector_label') or sec)}</span></div><div class="card"><small>Endüstri</small><b>{len(g['industry'])}</b><span>{e(ind)}</span></div><div class="card"><small>BIST100 üyeleri</small><b>{len(xset) if xset else 'N/A'}</b></div></div><p class="note">Eksik veri uydurulmaz. Mutlak referans bantları evrensel kesinlik değil, finansal oran mantığı + profil kalibrasyonudur. GYO/Holding için PD/DD gerçek NAD iskontosu değildir. Araştırma amaçlıdır; yatırım tavsiyesi değildir.</p></main></body></html>'''
 
 def safe(v):
     if isinstance(v,dict):return {str(k):safe(x) for k,x in v.items()}
@@ -1425,7 +1452,7 @@ def main():
     t=h.iloc[0].copy(); t["symbol"]=sym; p=profile(t)
     print("[2/11] BIST100 üyeleri alınıyor..."); xs=xu100(u)
     print("[3/11] BorsaPy/KAP ve 12 çeyreklik mali tablolar analiz ediliyor..."); REPORTS.mkdir(exist_ok=True); hist=build_historical_analysis(sym,p,REPORTS)
-    print("[4/11] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs); an=analyze(t,p,g); an=apply_profile_primary_source(an,p,hist,g); sc=scores(an,p)
+    print("[4/11] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs,p); an=analyze(t,p,g); an=apply_profile_primary_source(an,p,hist,g); sc=scores(an,p)
     print("[5/11] Her faktör yorumlanıyor..."); cm={k:factor_comment(v,p) for k,v in an.items()}
     print("[6/11] XU100 ve sektör endeksi performansı..."); ip=index_perf(); secidx=sector_index_code(t,p); sip=bist_index_perf(secidx)
     print("[7/11] Tarihsel büyüme, marj, nakit ve bilanço trendleri birleştiriliyor...")
