@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import borsapy as bp
 
 from analyze import (
     analyze as build_cross_section,
@@ -61,6 +62,16 @@ def is_financial_like(row: pd.Series) -> bool:
         "mortgage", "investment managers", "investment trust",
     ]
     return any(x in text for x in needles)
+
+
+def official_profile_sets() -> dict[str, set[str]]:
+    out: dict[str, set[str]] = {}
+    for code in ["XBANK","XSGRT","XGMYO","XYORT","XHOLD"]:
+        try:
+            out[code] = {str(x).upper() for x in bp.Index(code).component_symbols}
+        except Exception:
+            out[code] = set()
+    return out
 
 
 def profile_consistency(row: pd.Series, p: str) -> list[str]:
@@ -133,11 +144,23 @@ def audit_one(
     u: pd.DataFrame,
     xset: set[str],
     floor: str,
+    official_sets: dict[str, set[str]],
 ) -> dict[str, Any]:
     sym = str(row["symbol"])
     p = profile(row)
     issue_codes: list[str] = profile_consistency(row, p)
     error_text = None
+
+    if sym in official_sets.get("XBANK", set()) and p != "Banka":
+        issue_codes.append("INDEX_XBANK_PROFILE_MISMATCH")
+    if sym in official_sets.get("XSGRT", set()) and p != "Sigorta":
+        issue_codes.append("INDEX_XSGRT_PROFILE_MISMATCH")
+    if sym in official_sets.get("XGMYO", set()) and p != "GYO":
+        issue_codes.append("INDEX_XGMYO_PROFILE_MISMATCH")
+    if sym in official_sets.get("XYORT", set()) and p != "Yatırım Ortaklığı":
+        issue_codes.append("INDEX_XYORT_PROFILE_MISMATCH")
+    if sym in official_sets.get("XHOLD", set()) and p not in {"Holding","Yatırım Ortaklığı"}:
+        issue_codes.append("INDEX_XHOLD_PROFILE_REVIEW")
 
     try:
         hist = build_historical_analysis(
@@ -293,6 +316,7 @@ def main() -> None:
     u = universe()
     du = dedupe(u).sort_values("symbol").reset_index(drop=True)
     xset = xu100(u)
+    official_sets = official_profile_sets()
     floor = expected_reporting_floor()
 
     symbols = du.iloc[args.shard::args.shards].copy()
@@ -311,7 +335,7 @@ def main() -> None:
         sym = str(row["symbol"])
         print(f"[audit] {idx}/{len(symbols)} {sym}")
         try:
-            result = audit_one(row, u, xset, floor)
+            result = audit_one(row, u, xset, floor, official_sets)
         except Exception as exc:
             result = {
                 "symbol": sym,
