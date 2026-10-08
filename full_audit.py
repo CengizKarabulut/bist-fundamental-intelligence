@@ -209,8 +209,12 @@ def audit_one(
 
     if p == "Holding":
         issue_codes.append("HOLDING_NAD_MODEL_PENDING")
+    if p == "Yatırım Ortaklığı":
+        issue_codes.append("INVESTMENT_TRUST_NAV_MODEL_PENDING")
     if p == "Sigorta":
         issue_codes.append("INSURANCE_SPECIAL_MODEL_REVIEW")
+    if p == "Finansal":
+        issue_codes.append("NONBANK_FINANCIAL_MODEL_REVIEW")
 
     hsum = hist.get("summary", {}) if isinstance(hist, dict) else {}
     nd_stmt = fnum(hsum.get("net_debt_statement"))
