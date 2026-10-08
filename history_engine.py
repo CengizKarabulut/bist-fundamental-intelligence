@@ -58,6 +58,7 @@ BALANCE_ROWS = {
     "total_assets": ["Toplam Varlıklar", "TOPLAM AKTİFLER", "Toplam Aktifler", "AKTİF TOPLAMI"],
     "equity": [
         "Özkaynaklar", "Toplam Özkaynaklar",
+        "Özsermaye Toplamı",
         "Ana Ortaklığa Ait Özkaynaklar",
         "XVI. ÖZKAYNAKLAR",
     ],
