@@ -164,7 +164,15 @@ def entity(r):
 def universe():
     _,df=(Query().select(*FIELDS).set_markets("turkey").where(col("exchange")=="BIST",col("type")=="stock").order_by("market_cap_basic",ascending=False,nulls_first=False).limit(1000).get_scanner_data())
     if df is None or df.empty: raise RuntimeError("BIST evreni alınamadı")
-    df=df.copy(); df["symbol"]=df["ticker"].map(symbol); return df
+    df=df.copy()
+    # TradingView may tag exchange-traded certificates as type=stock. They are
+    # not ordinary listed-company shares and must not contaminate BIST equity
+    # medians or company counts (e.g. Darphane ALTIN, DMLKT certificate).
+    desc=df["description"].fillna("").astype(str)
+    non_equity=desc.str.contains(r"certificate|sertifika",case=False,regex=True,na=False)
+    df=df.loc[~non_equity].copy()
+    df["symbol"]=df["ticker"].map(symbol)
+    return df
 
 def xu100(u):
     # BorsaPy provides BIST index components directly. This is preferred over
