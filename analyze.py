@@ -108,7 +108,7 @@ def entity(r):
     return re.sub(r"\s+"," ",s).strip(" -.,")
 
 def universe():
-    _,df=(Query().select(*FIELDS).set_markets("turkey").where(col("exchange")=="BIST",col("is_primary")==True,col("type")=="stock").order_by("market_cap_basic",ascending=False,nulls_first=False).limit(1000).get_scanner_data())
+    _,df=(Query().select(*FIELDS).set_markets("turkey").where(col("exchange")=="BIST",col("type")=="stock").order_by("market_cap_basic",ascending=False,nulls_first=False).limit(1000).get_scanner_data())
     if df is None or df.empty: raise RuntimeError("BIST evreni alınamadı")
     df=df.copy(); df["symbol"]=df["ticker"].map(symbol); return df
 
