@@ -28,6 +28,9 @@ def main():
     assert profile({"description":"Turkiye Sinai Kalkinma Bankasi A.S.","industry":"Investment Banks/Brokers","sector":"Finance"}) == "Banka"
     assert profile({"description":"Adra Gayrimenkul Yatirim Ortakligi A.S.","industry":"Financial Conglomerates","sector":"Finance"}) == "GYO"
     assert profile({"description":"Gozde Girisim Sermayesi Yatirim Ortakligi A.S.","industry":"Investment Banks/Brokers","sector":"Finance"}) == "Yatırım Ortaklığı"
+    assert profile({"description":"TAV Havalimanlari Holding A.S.","industry":"Other Transportation","sector":"Transportation"}) == "Genel"
+    assert profile({"description":"Petkim Petrokimya Holding A.S.","industry":"Chemicals: Specialty","sector":"Process Industries"}) == "Genel"
+    assert profile({"description":"Deva Holding A.S.","industry":"Pharmaceuticals: Major","sector":"Health Technology"}) == "Genel"
 
     # Negative-equity denominator guard must prevent misleading ratio scores.
     dummy={
