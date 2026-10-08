@@ -11,6 +11,7 @@ on:
       - "data/nav_inputs.csv"
       - "regression_checks.py"
       - "requirements.txt"
+      - "version.py"
       - ".github/workflows/regression.yml"
   workflow_dispatch:
 
@@ -37,7 +38,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Python sözdizimi kontrolü
-        run: python -m py_compile analyze.py history_engine.py special_profiles.py regression_checks.py
+        run: python -m py_compile analyze.py history_engine.py special_profiles.py regression_checks.py version.py
 
       - name: ASELS sanayi/savunma testi
         run: python analyze.py ASELS
