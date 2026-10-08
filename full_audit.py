@@ -155,26 +155,22 @@ def profile_consistency(row: pd.Series, p: str) -> list[str]:
     ind = str(row.get("industry") or "").casefold()
     issues: list[str] = []
 
-    if "bank" in ind and p != "Banka":
+    if ind in {"major banks","regional banks"} and p not in {"Banka","Holding"}:
         issues.append("PROFILE_BANK_MISMATCH")
     if "insurance" in ind and p != "Sigorta":
         issues.append("PROFILE_INSURANCE_MISMATCH")
-    if ("real estate investment trust" in ind or "reit" in ind) and p != "GYO":
+    if ("real estate investment trust" in ind or ind.strip()=="reit") and p != "GYO":
         issues.append("PROFILE_GYO_MISMATCH")
-    if "financial conglomerate" in ind and p != "Holding":
-        issues.append("PROFILE_HOLDING_MISMATCH")
 
+    # Generic vendor labels can be wrong for consolidated holdings; official BIST
+    # index checks below are the hard source of truth.
     if is_financial_like(row) and p in {"Genel", "Savunma/Teknoloji"}:
         issues.append("SPECIAL_FINANCIAL_PROFILE_NEEDED")
 
-    # TradingView can classify some software/technology names broadly. This is
-    # not necessarily wrong, but is worth surfacing if a financial-sector name
-    # accidentally lands in technology.
     if "finance" in sec and p == "Savunma/Teknoloji":
         issues.append("PROFILE_TECH_FINANCE_CONFLICT")
 
     return issues
-
 
 def plausibility_issues(metrics: dict[str, Any]) -> list[str]:
     issues: list[str] = []
@@ -238,6 +234,8 @@ def audit_one(
         issue_codes.append("INDEX_XYORT_PROFILE_MISMATCH")
     if sym in official_sets.get("XHOLD", set()) and p not in {"Holding","Yatırım Ortaklığı"}:
         issue_codes.append("INDEX_XHOLD_PROFILE_REVIEW")
+    if p=="Holding" and official_sets.get("XHOLD") and sym not in official_sets.get("XHOLD", set()):
+        issue_codes.append("HOLDING_PROFILE_NOT_IN_XHOLD_REVIEW")
 
     try:
         hist = audited_history(sym,p)
@@ -255,7 +253,10 @@ def audit_one(
         error_text = str(exc)
 
     if hist.get("error"):
-        issue_codes.append("HISTORY_ERROR")
+        if p in {"Sigorta","Finansal","Yatırım Ortaklığı"}:
+            issue_codes.append("HISTORY_PROVIDER_PROFILE_UNSUPPORTED")
+        else:
+            issue_codes.append("HISTORY_ERROR")
         error_text = str(hist.get("error"))
 
     bm=bulk_market.get(sym)
