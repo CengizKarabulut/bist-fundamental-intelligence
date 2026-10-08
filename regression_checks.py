@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from analyze import profile, apply_profile_primary_source, economically_valid
+from analyze import profile, apply_profile_primary_source, economically_valid, scoreable
 from version import __version__
 
 R = Path("reports")
@@ -44,6 +44,12 @@ def main():
     assert economically_valid("pb",0.0) is False
     assert economically_valid("ev",-1.0) is False
     assert economically_valid("pfcf",12.0) is True
+
+    # Portfolio/NAD-driven profiles must not receive generic consolidated scores.
+    assert scoreable("roe","Holding") is False
+    assert scoreable("pe","Holding") is False
+    assert scoreable("roe","Yatırım Ortaklığı") is False
+    assert scoreable("pb","Yatırım Ortaklığı") is False
 
     # Negative-equity denominator guard must prevent misleading ratio scores.
     dummy={
@@ -109,7 +115,9 @@ def main():
 
     kh_sp=kchol["historical_analysis"].get("special_profile_analysis",{})
     assert kh_sp.get("status") in {"NAV_REQUIRED","NAV_AVAILABLE"}, kh_sp
+    assert kchol["scores"]["quality"] is None, kchol["scores"]["quality"]
     assert kchol["scores"]["valuation"] is None, kchol["scores"]["valuation"]
+    assert kchol["scores"]["composite"] is None, kchol["scores"]["composite"]
 
     ag_sp=ages["historical_analysis"].get("special_profile_analysis",{})
     assert ag_sp.get("status")=="INSURANCE_ENGINE", ag_sp
@@ -137,9 +145,13 @@ def main():
     # Financial institutions must not use industrial net-margin scoring.
     for r in (akb,albrk,ages,glbmd,isfin):
         assert r["metrics"]["netm"]["app"] is False, (r["symbol"],r["metrics"]["netm"])
+    # Insurance equity/assets is informative, not a solvency-capital score.
+    assert ages["metrics"]["eq_assets"]["app"] is False, ages["metrics"]["eq_assets"]
 
     # GYO: classic industrial valuation multiples must not create a valuation score.
     assert ekg["scores"]["valuation"] is None, ekg["scores"]["valuation"]
+    assert ekg["scores"]["quality"] is not None, ekg["scores"]["quality"]
+    assert ekg["scores"]["composite"] is None, ekg["scores"]["composite"]
     assert ekg["metrics"]["pb"]["scoreable"] is False
     assert ekg["metrics"]["ev"]["scoreable"] is False
     assert ekg["metrics"]["pe"]["scoreable"] is False
