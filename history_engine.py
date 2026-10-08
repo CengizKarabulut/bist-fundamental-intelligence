@@ -475,9 +475,16 @@ def _build_commentary(summary: dict[str, Any], profile: str) -> dict[str, Any]:
             watch.append(f"TTM faaliyet nakit akışı/net kâr dönüşümü {conv:.2f}x.")
     capex_to_ocf=summary.get("capex_to_ocf")
     if fcf_margin is not None:
-        (strengths if fcf_margin >= 8 else risks if fcf_margin < 0 else watch).append(
-            f"TTM serbest nakit akışı marjı {_fmt(fcf_margin,'%')}."
-        )
+        if profile=="GYO":
+            watch.append(
+                f"TTM serbest nakit akışı marjı {_fmt(fcf_margin,'%')}. GYO/proje geliştirici yapısında "
+                "arsa-stok ve proje yatırımları nakit akışını dönemsel olarak negatife çekebildiğinden bu oran "
+                "sanayi şirketlerindeki gibi tek başına kalite cezası olarak yorumlanmadı."
+            )
+        else:
+            (strengths if fcf_margin >= 8 else risks if fcf_margin < 0 else watch).append(
+                f"TTM serbest nakit akışı marjı {_fmt(fcf_margin,'%')}."
+            )
     if conv is not None and conv >= 1 and fcf_margin is not None and fcf_margin < 0 and capex_to_ocf is not None:
         watch.append(
             f"Faaliyet nakit üretimi güçlü olsa da yatırım harcamaları OCF'nin {capex_to_ocf:.2f} katına ulaşıyor; "
@@ -502,6 +509,19 @@ def _build_commentary(summary: dict[str, Any], profile: str) -> dict[str, Any]:
     if current_ratio is not None:
         (strengths if current_ratio >= 1.5 else risks if current_ratio < 1 else watch).append(
             f"Cari oran {current_ratio:.2f}x."
+        )
+
+    if profile=="GYO":
+        bed=summary.get("book_equity_discount")
+        if bed is not None:
+            paragraphs.append(
+                f"Piyasa değeri defter özkaynağına göre yaklaşık %{bed:.1f} iskontolu görünmektedir; "
+                "bu gösterge NAD iskontosu değildir ve portföy ekspertiz değerinin yerini tutmaz."
+            )
+        paragraphs.append(
+            "GYO/proje geliştirici şirketlerde satış ve kârlar teslim takvimine bağlı olarak dönemler arasında "
+            "yüksek oynaklık gösterebilir; bu nedenle tek çeyrek büyüme yerine NAD, proje stoğu, teslimatlar, "
+            "ön satışlar ve finansman ihtiyacı birlikte okunmalıdır."
         )
 
     return {"paragraphs": paragraphs, "strengths": strengths, "risks": risks, "watch": watch}
