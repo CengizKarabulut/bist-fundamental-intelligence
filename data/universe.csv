@@ -1,0 +1,31 @@
+symbol,profile,sector_group,industry_group
+ASELS,Savunma/Teknoloji,Elektronik Teknoloji,Savunma ve Havacılık
+SDTTR,Savunma/Teknoloji,Elektronik Teknoloji,Savunma ve Havacılık
+PAPIL,Savunma/Teknoloji,Elektronik Teknoloji,Savunma ve Havacılık
+KAREL,Savunma/Teknoloji,Elektronik Teknoloji,Elektronik Haberleşme
+ARDYZ,Savunma/Teknoloji,Teknoloji,Yazılım
+FORTE,Savunma/Teknoloji,Teknoloji,Yazılım
+MIATK,Savunma/Teknoloji,Teknoloji,Yazılım
+HTTBT,Savunma/Teknoloji,Teknoloji,Havacılık Yazılım
+AKBNK,Banka,Finans,Banka
+GARAN,Banka,Finans,Banka
+ISCTR,Banka,Finans,Banka
+YKBNK,Banka,Finans,Banka
+VAKBN,Banka,Finans,Banka
+HALKB,Banka,Finans,Banka
+ALBRK,Banka,Finans,Katılım Bankası
+TSKB,Banka,Finans,Kalkınma ve Yatırım Bankası
+TUPRS,Genel,Enerji,Rafineri
+AKSEN,Genel,Enerji,Elektrik Üretimi
+ENJSA,Genel,Enerji,Elektrik Dağıtım ve Perakende
+BIMAS,Genel,Perakende,Gıda Perakendesi
+MGROS,Genel,Perakende,Gıda Perakendesi
+SOKM,Genel,Perakende,Gıda Perakendesi
+THYAO,Genel,Ulaştırma,Havayolu
+PGSUS,Genel,Ulaştırma,Havayolu
+TAVHL,Genel,Ulaştırma,Havalimanı İşletmeciliği
+FROTO,Genel,Otomotiv,Otomotiv
+TOASO,Genel,Otomotiv,Otomotiv
+DOAS,Genel,Otomotiv,Otomotiv Dağıtım
+KCHOL,Genel,Holding,Holding
+SAHOL,Genel,Holding,Holding
