@@ -974,6 +974,89 @@ def validation_html(validation):
         '<th>İş Yatırım</th><th>Fark</th><th>Durum</th></tr>'+''.join(rows)+'</table></div>'
     )
 
+def special_profile_html(history):
+    if not history or history.get("error"):
+        return ""
+    sp=history.get("special_profile_analysis") or {}
+    prof=sp.get("profile")
+    if not sp or sp.get("status")=="STANDARD":
+        return ""
+
+    e=lambda z:html.escape(str(z))
+    m=sp.get("metrics",{})
+    v=sp.get("valuation",{})
+    comments=sp.get("commentary",[])
+
+    def money(x):
+        return _hist_money(x)
+    def num(x,suffix="",digits=1):
+        return _hist_num(x,suffix,digits)
+
+    cards=[]
+    if prof=="Sigorta":
+        pairs=[
+            ("Net Yazılan Prim",money(m.get("net_written_premium"))),
+            ("Prim Büyümesi",num(m.get("premium_yoy"),"%")),
+            ("Teknik Denge",money(m.get("technical_balance"))),
+            ("Teknik Marj",num(m.get("technical_margin"),"%")),
+            ("Net Kâr Büyümesi",num(m.get("net_income_yoy_special"),"%")),
+            ("Özkaynak/Aktif",num(m.get("equity_to_assets"),"%")),
+        ]
+    elif prof=="Finansal":
+        pairs=[
+            ("Finans Brüt Sonuç",money(m.get("finance_gross_profit"))),
+            ("Brüt Sonuç YoY",num(m.get("finance_gross_profit_yoy"),"%")),
+            ("Finansal Alacaklar",money(m.get("finance_receivables"))),
+            ("Alacaklar YoY",num(m.get("finance_receivables_yoy"),"%")),
+            ("Net Kâr YoY",num(m.get("net_income_yoy"),"%")),
+            ("Özkaynak/Aktif",num(m.get("equity_to_assets"),"%")),
+        ]
+    elif prof=="Banka":
+        pairs=[
+            ("Net Kâr YoY",num(m.get("net_income_yoy"),"%")),
+            ("Net Faiz Geliri YoY",num(m.get("net_interest_income_yoy"),"%")),
+            ("Ücret/Komisyon YoY",num(m.get("fee_income_yoy"),"%")),
+            ("Kredi Büyümesi",num(m.get("loans_yoy"),"%")),
+            ("Mevduat Büyümesi",num(m.get("deposits_yoy"),"%")),
+            ("Özkaynak/Aktif",num(m.get("equity_to_assets"),"%")),
+        ]
+    elif prof in {"GYO","Holding","Yatırım Ortaklığı"}:
+        pairs=[
+            ("Piyasa Değeri",money(m.get("market_cap"))),
+            ("Defter Özkaynağı",money(m.get("book_equity"))),
+            ("Defter İskontosu/Primi",num(m.get("book_value_discount_pct"),"%")),
+            ("Net Borç",money(m.get("net_debt"))),
+            ("NAD",money(v.get("nav_total_try"))),
+            ("PD/NAD İskontosu",num(v.get("pd_nav_discount_pct"),"%")),
+        ]
+    else:
+        pairs=[]
+
+    for name,value in pairs:
+        cards.append(
+            f'<div class="card"><small>{e(name)}</small><b>{e(value)}</b></div>'
+        )
+
+    notes="".join(f"<li>{e(x)}</li>" for x in comments)
+    status_text=e(sp.get("status","N/A"))
+    source_note=""
+    if v.get("status")=="NAV_AVAILABLE":
+        source_note=(
+            f"<p>NAD tarihi: {e(v.get('as_of') or 'N/A')} · Kaynak: "
+            f"{e(v.get('source') or 'N/A')}</p>"
+        )
+    elif v.get("status")=="NAV_REQUIRED":
+        source_note=(
+            "<p>Gerçek NAD verisi sağlanmadığı için değerleme skoru bilinçli olarak boş bırakılmıştır.</p>"
+        )
+
+    return (
+        f'<h2>{e(prof)} Özel Analiz Motoru</h2>'
+        f'<div class="note"><b>Motor durumu:</b> {status_text}{source_note}</div>'
+        f'<div class="grid">{"".join(cards)}</div>'
+        + (f'<div class="note expert"><ul>{notes}</ul></div>' if notes else "")
+    )
+
 def history_html(history):
     if not history:
         return '<div class="note">Tarihsel mali tablo katmanı çalıştırılmadı.</div>'
@@ -1082,13 +1165,14 @@ def html_report(t,p,a,s,g,xset,perf,comments,gen,history=None,validation=None,se
         cards.append(f'<div class="card"><small>{e(n)}</small><b>{e(scoretxt(v))}</b><span>{e(status(v))}</span></div>')
     rows=[]; blocks=[]
     for k,x in a.items():
-        if x["v"] is None:continue
+        if x["v"] is None and "A/D" not in str(x.get("source","")):continue
         G=x["groups"]
         def grp(n):
             q=G[n]
             return f"{e(fmt(q['median'],x['kind']))}<small>n={q['n']} · {e(scoretxt(q['pct']))}</small>"
         rows.append(
             f"<tr><td>{e(x['label'])}</td><td>{e(fmt(x['v'],x['kind']))}</td>"
+            f"<td>{e(x.get('source','N/A'))}</td>"
             f"<td>{e('Uygulanmaz' if not x['app'] else 'Skor dışı' if not x.get('scoreable',True) else status(x['abs']))}</td>"
             f"<td>{grp('industry')}</td><td>{grp('sector')}</td><td>{grp('xu100')}</td><td>{grp('bist')}</td></tr>"
         )
@@ -1115,7 +1199,7 @@ def html_report(t,p,a,s,g,xset,perf,comments,gen,history=None,validation=None,se
             f"<td>{fmt(sip,'%')}</td><td>{'N/A' if sal is None else f'{sal:+.2f} puan'}</td></tr>"
         )
     sec=str(t.get('sector') or 'N/A'); ind=str(t.get('industry') or 'N/A'); name=str(t.get('description') or t.get('name') or t['symbol'])
-    return f'''<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(t['symbol'])} — BIST Fundamental Intelligence</title><style>body{{font-family:Arial;background:#0d1117;color:#e6edf3;margin:0;line-height:1.5}}main{{max-width:1500px;margin:auto;padding:28px}}small{{display:block;color:#8b949e}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}.card,section,.note{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px}}.card b{{display:block;font-size:26px}}.table{{overflow:auto;margin:18px 0}}table{{width:100%;min-width:1100px;border-collapse:collapse;background:#161b22}}th,td{{padding:9px;border:1px solid #30363d;text-align:right;vertical-align:top}}th:first-child,td:first-child{{text-align:left}}th{{background:#21262d}}section{{margin:10px 0}}section h3{{margin:0 0 6px;font-size:16px}}section p{{margin:0}}.note{{border-left:4px solid #d29922}}.expert{{border-left-color:#3fb950}}</style></head><body><main><h1>{e(t['symbol'])} — Fundamental Intelligence Report</h1><p>{e(name)} · Profil: {e(p)} · Sektör: {e(sec)} · Endüstri: {e(ind)} · {e(gen)}</p><div class="grid">{''.join(cards)}</div><h2>Profesyonel Genel Değerlendirme</h2><div class="note expert">{e(overall(t,p,s,perf,history,validation,sector_code,sector_perf))}</div>{history_html(history)}{validation_html(validation)}<h2>Kategori Özeti</h2><div class="table"><table><tr><th>Kategori</th><th>Mutlak</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(cr)}</table></div><h2>Tüm Finansal Faktörler</h2><div class="note">Karşılaştırma sabit emsal sayısıyla değil, güncel tam BIST evreninden otomatik sektör/endüstri, BIST100 ve tüm BIST dağılımlarıyla yapılır. 100 puan göreli olarak daha avantajlı konumu gösterir.</div><div class="table"><table><tr><th>Metrik</th><th>{e(t['symbol'])}</th><th>Mutlak</th><th>Endüstri</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(rows)}</table></div><h2>Faktör Bazlı Uzman Yorumları</h2>{''.join(blocks)}<h2>Endeks ve Sektör Fiyat Relatif Performansı</h2><div class="table"><table><tr><th>Dönem</th><th>{e(t['symbol'])}</th><th>XU100</th><th>XU100 Alfa</th><th>{e(sector_code or 'Sektör Endeksi N/A')}</th><th>Sektör Alfa</th></tr>{''.join(pr)}</table></div><h2>Kapsam</h2><div class="grid"><div class="card"><small>BIST Pay/Kotasyon</small><b>{g.get('raw_count','N/A')}</b></div><div class="card"><small>Benzersiz BIST Şirketi</small><b>{len(g['all'])}</b></div><div class="card"><small>Sektör</small><b>{len(g['sector'])}</b><span>{e(sec)}</span></div><div class="card"><small>Endüstri</small><b>{len(g['industry'])}</b><span>{e(ind)}</span></div><div class="card"><small>BIST100 üyeleri</small><b>{len(xset) if xset else 'N/A'}</b></div></div><p class="note">Eksik veri uydurulmaz. Mutlak referans bantları evrensel kesinlik değil, finansal oran mantığı + profil kalibrasyonudur. GYO/Holding için PD/DD gerçek NAD iskontosu değildir. Araştırma amaçlıdır; yatırım tavsiyesi değildir.</p></main></body></html>'''
+    return f'''<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(t['symbol'])} — BIST Fundamental Intelligence</title><style>body{{font-family:Arial;background:#0d1117;color:#e6edf3;margin:0;line-height:1.5}}main{{max-width:1500px;margin:auto;padding:28px}}small{{display:block;color:#8b949e}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}.card,section,.note{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px}}.card b{{display:block;font-size:26px}}.table{{overflow:auto;margin:18px 0}}table{{width:100%;min-width:1100px;border-collapse:collapse;background:#161b22}}th,td{{padding:9px;border:1px solid #30363d;text-align:right;vertical-align:top}}th:first-child,td:first-child{{text-align:left}}th{{background:#21262d}}section{{margin:10px 0}}section h3{{margin:0 0 6px;font-size:16px}}section p{{margin:0}}.note{{border-left:4px solid #d29922}}.expert{{border-left-color:#3fb950}}</style></head><body><main><h1>{e(t['symbol'])} — Fundamental Intelligence Report</h1><p>{e(name)} · Profil: {e(p)} · Sektör: {e(sec)} · Endüstri: {e(ind)} · {e(gen)}</p><div class="grid">{''.join(cards)}</div><h2>Profesyonel Genel Değerlendirme</h2><div class="note expert">{e(overall(t,p,s,perf,history,validation,sector_code,sector_perf))}</div>{special_profile_html(history)}{history_html(history)}{validation_html(validation)}<h2>Kategori Özeti</h2><div class="table"><table><tr><th>Kategori</th><th>Mutlak</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(cr)}</table></div><h2>Tüm Finansal Faktörler</h2><div class="note"><b>Veri otoritesi:</b> hedef hissede İş Yatırım tarafından sağlanan F/K, PD/DD, FD/FAVÖK, ROE ve ROA önceliklidir; diğer çapraz-kesit metrikleri TradingView'den gelir. Tarihsel mali tablolar BorsaPy/İş Yatırım katmanından alınır. Kaynaklar ayrışırsa fark gizlenmez. Karşılaştırma sabit emsal sayısıyla değil, güncel endüstri/sektör, BIST100 ve tüm BIST dağılımlarıyla yapılır.</div><div class="table"><table><tr><th>Metrik</th><th>{e(t['symbol'])}</th><th>Kaynak</th><th>Mutlak</th><th>Endüstri</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(rows)}</table></div><h2>Faktör Bazlı Uzman Yorumları</h2>{''.join(blocks)}<h2>Endeks ve Sektör Fiyat Relatif Performansı</h2><div class="table"><table><tr><th>Dönem</th><th>{e(t['symbol'])}</th><th>XU100</th><th>XU100 Alfa</th><th>{e(sector_code or 'Sektör Endeksi N/A')}</th><th>Sektör Alfa</th></tr>{''.join(pr)}</table></div><h2>Kapsam</h2><div class="grid"><div class="card"><small>BIST Pay/Kotasyon</small><b>{g.get('raw_count','N/A')}</b></div><div class="card"><small>Benzersiz BIST Şirketi</small><b>{len(g['all'])}</b></div><div class="card"><small>Sektör</small><b>{len(g['sector'])}</b><span>{e(sec)}</span></div><div class="card"><small>Endüstri</small><b>{len(g['industry'])}</b><span>{e(ind)}</span></div><div class="card"><small>BIST100 üyeleri</small><b>{len(xset) if xset else 'N/A'}</b></div></div><p class="note">Eksik veri uydurulmaz. Mutlak referans bantları evrensel kesinlik değil, finansal oran mantığı + profil kalibrasyonudur. GYO/Holding için PD/DD gerçek NAD iskontosu değildir. Araştırma amaçlıdır; yatırım tavsiyesi değildir.</p></main></body></html>'''
 
 def borsapy_target_context(sym,p):
     """BIST-specific deep context for the selected stock.
