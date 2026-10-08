@@ -74,11 +74,17 @@ CASHFLOW_ROWS = {
         "Faaliyetlerden Elde Edilen Nakit Akışları",
     ],
     "capex": [
+        "Sabit Sermaye Yatırımları",
         "Maddi ve Maddi Olmayan Duran Varlık Alımları",
         "Maddi Duran Varlık Alımları",
         "Maddi ve Maddi Olmayan Duran Varlık Alımlarından Kaynaklanan Nakit Çıkışları",
         "Maddi Duran Varlık Alımından Kaynaklanan Nakit Çıkışları",
         "Yatırım Harcamaları",
+    ],
+    "free_cash_flow": [
+        "Serbest Nakit Akım",
+        "Serbest Nakit Akışı",
+        "Free Cash Flow",
     ],
 }
 
@@ -112,9 +118,15 @@ def _year_key(label: Any) -> int:
         return 0
 
 
-def _numeric_series(row: pd.Series | None, quarterly: bool = True) -> pd.Series:
+def _numeric_series(row: pd.Series | pd.DataFrame | None, quarterly: bool = True) -> pd.Series:
     if row is None:
         return pd.Series(dtype=float)
+    # Duplicate financial-statement labels may cause df.loc[label] to return a
+    # DataFrame. For single-row metrics use the first physical occurrence.
+    if isinstance(row, pd.DataFrame):
+        if row.empty:
+            return pd.Series(dtype=float)
+        row = row.iloc[0]
     s = pd.to_numeric(row, errors="coerce").dropna().astype(float)
     if s.empty:
         return s
@@ -159,20 +171,29 @@ def _sum_matching_rows(df: pd.DataFrame | None, keywords: list[str], quarterly: 
     if df is None or df.empty:
         return pd.Series(dtype=float), []
     keys = [_norm(x) for x in keywords]
-    rows: list[Any] = []
-    for idx in df.index:
-        n = _norm(idx)
-        if any(k in n for k in keys):
-            rows.append(idx)
-
-    if not rows:
+    mask = [any(k in _norm(idx) for k in keys) for idx in df.index]
+    subset = df.loc[mask]
+    if subset.empty:
         return pd.Series(dtype=float), []
 
-    result = None
-    for idx in rows:
-        s = _numeric_series(df.loc[idx], quarterly=quarterly)
-        result = s if result is None else result.add(s, fill_value=0.0)
-    return (result if result is not None else pd.Series(dtype=float)), [str(x) for x in rows]
+    # BorsaPy merges financial-statement batches on row labels. When the source
+    # has two legitimate rows with the same label (e.g. short- and long-term
+    # "Finansal Borçlar"), multi-batch joins can repeat Cartesian combinations.
+    # Summing all physical rows would therefore multiply debt. For each period
+    # we sum UNIQUE numeric values under the matched label(s).
+    data: dict[Any, float] = {}
+    for colname in subset.columns:
+        col = pd.to_numeric(subset[colname], errors="coerce").dropna()
+        if col.empty:
+            continue
+        unique_vals = pd.unique(col.astype(float))
+        data[colname] = float(sum(unique_vals))
+
+    s = pd.Series(data, dtype=float)
+    if not s.empty:
+        ordered = sorted(s.index, key=_qkey if quarterly else _year_key)
+        s = s.reindex(ordered)
+    return s, list(dict.fromkeys(str(x) for x in subset.index))
 
 
 def _yoy(series: pd.Series) -> dict[str, float | None]:
@@ -550,6 +571,7 @@ def build_historical_analysis(symbol: str, profile: str, report_dir: Path | None
         net_income_d = _discrete_from_ytd(net_income)
         ocf_d = _discrete_from_ytd(cashflow.get("operating_cash_flow", pd.Series(dtype=float)))
         capex_d = _discrete_from_ytd(cashflow.get("capex", pd.Series(dtype=float)))
+        fcf_d = _discrete_from_ytd(cashflow.get("free_cash_flow", pd.Series(dtype=float)))
 
         ttm_rev = _ttm(revenue_d)
         ttm_ni = _ttm(net_income_d)
@@ -557,7 +579,12 @@ def build_historical_analysis(symbol: str, profile: str, report_dir: Path | None
         ttm_capex = None
         if capex_d is not None and len(capex_d.dropna()) >= 4:
             ttm_capex = float(capex_d.dropna().iloc[-4:].abs().sum())
-        ttm_fcf = ttm_ocf - ttm_capex if ttm_ocf is not None and ttm_capex is not None else None
+
+        # Prefer the provider's explicit "Serbest Nakit Akım" row. If missing,
+        # reconstruct FCF as operating cash flow minus absolute capex.
+        ttm_fcf = _ttm(fcf_d)
+        if ttm_fcf is None and ttm_ocf is not None and ttm_capex is not None:
+            ttm_fcf = ttm_ocf - ttm_capex
 
         latest_periods = sorted(
             set(revenue.index) | set(net_income.index) | set(balance.get("total_assets", pd.Series(dtype=float)).index),
