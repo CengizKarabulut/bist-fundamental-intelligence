@@ -394,13 +394,18 @@ def source_validation(t,metrics,history):
         iy=market.get(mkey)
         iy=fnum(iy)
         if tv is not None and iy is None:
-            # İş Yatırım company card explicitly reports A/D for these cases
-            # when the ratio is not economically meaningful.
+            # In GYO valuation fields İş Yatırım frequently reports A/D when
+            # realised earnings/EBITDA make the multiple economically meaningless.
+            # Outside that profile, a missing scrape is treated as N/A rather than
+            # automatically assuming A/D.
+            is_gyo_ad=(history.get("profile")=="GYO" and key in {"pe","ev"})
+            st="İŞ YATIRIM A/D" if is_gyo_ad else "N/A"
             checks.append({
                 "label":label,"tradingview":tv,"borsapy":None,"difference":None,
-                "status":"İŞ YATIRIM A/D","kind":kind
+                "status":st,"kind":kind
             })
-            critical+=1
+            if is_gyo_ad:
+                critical+=1
         elif tv is None or iy is None:
             checks.append({"label":label,"tradingview":tv,"borsapy":iy,"difference":None,"status":"N/A","kind":kind})
         else:
