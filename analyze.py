@@ -474,7 +474,11 @@ def source_validation(t,metrics,history):
             # realised earnings/EBITDA make the multiple economically meaningless.
             # Outside that profile, a missing scrape is treated as N/A rather than
             # automatically assuming A/D.
-            is_gyo_ad=(history.get("profile")=="GYO" and key in {"pe","ev"})
+            is_gyo_ad=(
+                history.get("profile")=="GYO"
+                and history.get("market_source_available",False)
+                and key in {"pe","ev"}
+            )
             st="İŞ YATIRIM A/D" if is_gyo_ad else "N/A"
             checks.append({
                 "label":label,"tradingview":tv,"borsapy":None,"difference":None,
