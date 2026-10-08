@@ -12,6 +12,8 @@ on:
       - "audit_all.py"
       - "audit_merge.py"
       - "requirements.txt"
+      - "quality_gate.py"
+      - "version.py"
       - ".github/workflows/full_bist_audit.yml"
 
 concurrency:
@@ -69,7 +71,10 @@ jobs:
           merge-multiple: false
       - name: Sonuçları birleştir
         run: python audit_merge.py
+      - name: Release quality gate
+        run: python quality_gate.py --summary audit_summary/full_bist_audit_summary.json
       - name: Full audit raporunu yükle
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: full-bist-audit
