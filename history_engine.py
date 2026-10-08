@@ -429,6 +429,36 @@ def _build_commentary(summary: dict[str, Any], profile: str) -> dict[str, Any]:
             )
         return {"paragraphs": paragraphs, "strengths": strengths, "risks": risks, "watch": watch}
 
+    if profile in {"Holding","Yatırım Ortaklığı"}:
+        eq_yoy=summary.get("equity_yoy")
+        assets_yoy=summary.get("assets_yoy")
+        if ni_yoy is not None:
+            paragraphs.append(
+                f"{latest_period or 'Son dönem'} konsolide net kârı yıllık {_fmt(ni_yoy,'%')} değişti; "
+                "bu değişim iştirak ve portföy değer hareketlerinden etkilenebileceği için operasyonel şirket kârı gibi yorumlanmadı."
+            )
+        if eq_yoy is not None or assets_yoy is not None:
+            paragraphs.append(
+                f"Özkaynak büyümesi {_fmt(eq_yoy,'%')}, aktif büyümesi {_fmt(assets_yoy,'%')}."
+            )
+        net_debt=summary.get("net_debt")
+        if net_debt is not None:
+            watch.append(
+                f"Konsolide net borç {_format_large(net_debt)}; holding/portföy değerlemesinde bunun holding-seviye "
+                "net nakit/borçtan farklı olabileceği dikkate alınmalı."
+            )
+        if profile=="Holding":
+            paragraphs.append(
+                "Holdinglerde konsolide ciro, marj ve FCF ana kalite skoru olarak kullanılmadı; iştirak bazlı NAD, "
+                "holding seviyesindeki net nakit/borç ve holding iskontosu esas değerleme çerçevesidir."
+            )
+        else:
+            paragraphs.append(
+                "Yatırım ortaklıklarında portföy/NAV ve piyasa değerine iskonto/prim ana referanstır; "
+                "dönem kârı ve konsolide oranlar portföy değer değişimleri nedeniyle karar skoruna dönüştürülmedi."
+            )
+        return {"paragraphs": paragraphs, "strengths": strengths, "risks": risks, "watch": watch}
+
     if profile in {"Sigorta","Finansal"}:
         if ni_yoy is not None:
             paragraphs.append(
