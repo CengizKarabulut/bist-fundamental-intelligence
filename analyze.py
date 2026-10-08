@@ -165,7 +165,14 @@ def wavg(items):
 def groups(u,t,xset):
     du=dedupe(u); e=entity(t); p=du[du.apply(entity,axis=1)!=e]
     sec=str(t.get("sector") or ""); ind=str(t.get("industry") or "")
-    return {"industry":p[p["industry"].astype(str).str.casefold()==ind.casefold()] if ind else p.iloc[0:0],"sector":p[p["sector"].astype(str).str.casefold()==sec.casefold()] if sec else p.iloc[0:0],"xu100":p[p["symbol"].isin(xset)] if xset else p.iloc[0:0],"bist":p,"all":du}
+    return {
+        "industry":p[p["industry"].astype(str).str.casefold()==ind.casefold()] if ind else p.iloc[0:0],
+        "sector":p[p["sector"].astype(str).str.casefold()==sec.casefold()] if sec else p.iloc[0:0],
+        "xu100":p[p["symbol"].isin(xset)] if xset else p.iloc[0:0],
+        "bist":p,
+        "all":du,
+        "raw_count":len(u),
+    }
 
 def analyze(t,p,g):
     out={}
@@ -239,18 +246,21 @@ def source_validation(metrics,history):
 
     h=history.get("summary",{})
     specs=[
-        ("Ciro Büyümesi TTM","rev_g",h.get("revenue_ttm_yoy"),"%",10.0),
-        ("Net Kâr Büyümesi TTM","ni_g",h.get("net_income_ttm_yoy"),"%",15.0),
-        ("Faaliyet Marjı TTM","opm",h.get("ttm_operating_margin"),"%",5.0),
-        ("Net Marj TTM","netm",h.get("ttm_net_margin"),"%",5.0),
-        ("FCF Marjı TTM","fcfm",h.get("fcf_margin"),"%",5.0),
-        ("Cari Oran","curr",h.get("current_ratio"),"x",0.25),
+        # Growth can diverge across vendors because of TMS 29 restatement basis,
+        # comparative-period handling and update timing. Treat large same-sign
+        # growth gaps as basis/freshness warnings rather than automatic hard errors.
+        ("Ciro Büyümesi TTM","rev_g",h.get("revenue_ttm_yoy"),"%",10.0,True),
+        ("Net Kâr Büyümesi TTM","ni_g",h.get("net_income_ttm_yoy"),"%",15.0,True),
+        ("Faaliyet Marjı TTM","opm",h.get("ttm_operating_margin"),"%",5.0,False),
+        ("Net Marj TTM","netm",h.get("ttm_net_margin"),"%",5.0,False),
+        ("FCF Marjı TTM","fcfm",h.get("fcf_margin"),"%",5.0,False),
+        ("Cari Oran","curr",h.get("current_ratio"),"x",0.25,False),
     ]
 
     checks=[]
     critical=0
     warning=0
-    for label,key,hval,kind,tol in specs:
+    for label,key,hval,kind,tol,basis_sensitive in specs:
         tv=metrics.get(key,{}).get("v")
         if tv is None or hval is None:
             checks.append({"label":label,"tradingview":tv,"borsapy":hval,"difference":None,"status":"N/A","kind":kind})
@@ -260,6 +270,9 @@ def source_validation(metrics,history):
         if sign_conflict and kind=="%" and max(abs(tv),abs(hval))>=3:
             st="KRİTİK FARK"
             critical+=1
+        elif abs(diff)>tol*2 and basis_sensitive:
+            st="BAZ/FRESHNESS FARKI"
+            warning+=1
         elif abs(diff)>tol*2:
             st="BÜYÜK FARK"
             critical+=1
@@ -270,7 +283,7 @@ def source_validation(metrics,history):
             st="UYUMLU"
         checks.append({"label":label,"tradingview":tv,"borsapy":hval,"difference":diff,"status":st,"kind":kind})
 
-    confidence=max(0.0,100.0-critical*20.0-warning*7.0)
+    confidence=max(0.0,100.0-critical*20.0-warning*5.0)
     status_text="YÜKSEK" if confidence>=85 else "ORTA" if confidence>=65 else "DÜŞÜK"
     return {
         "confidence":confidence,
@@ -450,7 +463,10 @@ def validation_html(validation):
         f'<div class="card"><small>Veri Güveni</small><b>{validation["confidence"]:.0f}/100</b>'
         f'<span>{e(validation.get("status","N/A"))}</span></div>'
         '<div class="note">TradingView çapraz-kesit verileri ile BorsaPy/İş Yatırım mali tablolarından '
-        'türetilen aynı-bazlı TTM metrikleri karşılaştırılır. Farklar otomatik olarak gizlenmez.</div>'
+        'türetilen TTM metrikleri karşılaştırılır. Farklar otomatik olarak gizlenmez. Büyüme oranlarında '
+        'TMS 29 enflasyon muhasebesi, karşılaştırmalı dönemlerin yeniden ifade edilmesi ve veri güncelleme '
+        'zamanı sağlayıcılar arasında farklı bazlar oluşturabilir; aynı yönlü büyüme farkları bu nedenle '
+        'BAZ/FRESHNESS FARKI olarak ayrıca işaretlenir.</div>'
         '<div class="table"><table><tr><th>Metrik</th><th>TradingView</th><th>İş Yatırım Türetilmiş</th>'
         '<th>Fark</th><th>Durum</th></tr>'+''.join(rows)+'</table></div>'
     )
@@ -557,7 +573,7 @@ def html_report(t,p,a,s,g,xset,perf,comments,gen,history=None,validation=None):
         sp=fnum(t.get({"3m":"Perf.3M","6m":"Perf.6M","12m":"Perf.Y"}[k])); xp=perf[k]; al=sp-xp if sp is not None and xp is not None else None
         pr.append(f"<tr><td>{n}</td><td>{fmt(sp,'%')}</td><td>{fmt(xp,'%')}</td><td>{'N/A' if al is None else f'{al:+.2f} puan'}</td></tr>")
     sec=str(t.get('sector') or 'N/A'); ind=str(t.get('industry') or 'N/A'); name=str(t.get('description') or t.get('name') or t['symbol'])
-    return f'''<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(t['symbol'])} — BIST Fundamental Intelligence</title><style>body{{font-family:Arial;background:#0d1117;color:#e6edf3;margin:0;line-height:1.5}}main{{max-width:1500px;margin:auto;padding:28px}}small{{display:block;color:#8b949e}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}.card,section,.note{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px}}.card b{{display:block;font-size:26px}}.table{{overflow:auto;margin:18px 0}}table{{width:100%;min-width:1100px;border-collapse:collapse;background:#161b22}}th,td{{padding:9px;border:1px solid #30363d;text-align:right;vertical-align:top}}th:first-child,td:first-child{{text-align:left}}th{{background:#21262d}}section{{margin:10px 0}}section h3{{margin:0 0 6px;font-size:16px}}section p{{margin:0}}.note{{border-left:4px solid #d29922}}.expert{{border-left-color:#3fb950}}</style></head><body><main><h1>{e(t['symbol'])} — Fundamental Intelligence Report</h1><p>{e(name)} · Profil: {e(p)} · Sektör: {e(sec)} · Endüstri: {e(ind)} · {e(gen)}</p><div class="grid">{''.join(cards)}</div><h2>Profesyonel Genel Değerlendirme</h2><div class="note expert">{e(overall(t,p,s,perf,history,validation))}</div>{history_html(history)}{validation_html(validation)}<h2>Kategori Özeti</h2><div class="table"><table><tr><th>Kategori</th><th>Mutlak</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(cr)}</table></div><h2>Tüm Finansal Faktörler</h2><div class="note">Karşılaştırma sabit emsal sayısıyla değil, güncel tam BIST evreninden otomatik sektör/endüstri, BIST100 ve tüm BIST dağılımlarıyla yapılır. 100 puan göreli olarak daha avantajlı konumu gösterir.</div><div class="table"><table><tr><th>Metrik</th><th>{e(t['symbol'])}</th><th>Mutlak</th><th>Endüstri</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(rows)}</table></div><h2>Faktör Bazlı Uzman Yorumları</h2>{''.join(blocks)}<h2>BIST100 Fiyat Relatif Performansı</h2><div class="table"><table><tr><th>Dönem</th><th>{e(t['symbol'])}</th><th>XU100</th><th>Alfa</th></tr>{''.join(pr)}</table></div><h2>Kapsam</h2><div class="grid"><div class="card"><small>Tüm BIST</small><b>{len(g['all'])}</b></div><div class="card"><small>Sektör</small><b>{len(g['sector'])}</b><span>{e(sec)}</span></div><div class="card"><small>Endüstri</small><b>{len(g['industry'])}</b><span>{e(ind)}</span></div><div class="card"><small>BIST100 üyeleri</small><b>{len(xset) if xset else 'N/A'}</b></div></div><p class="note">Eksik veri uydurulmaz. Mutlak referans bantları evrensel kesinlik değil, finansal oran mantığı + profil kalibrasyonudur. GYO/Holding için PD/DD gerçek NAD iskontosu değildir. Araştırma amaçlıdır; yatırım tavsiyesi değildir.</p></main></body></html>'''
+    return f'''<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(t['symbol'])} — BIST Fundamental Intelligence</title><style>body{{font-family:Arial;background:#0d1117;color:#e6edf3;margin:0;line-height:1.5}}main{{max-width:1500px;margin:auto;padding:28px}}small{{display:block;color:#8b949e}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}.card,section,.note{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px}}.card b{{display:block;font-size:26px}}.table{{overflow:auto;margin:18px 0}}table{{width:100%;min-width:1100px;border-collapse:collapse;background:#161b22}}th,td{{padding:9px;border:1px solid #30363d;text-align:right;vertical-align:top}}th:first-child,td:first-child{{text-align:left}}th{{background:#21262d}}section{{margin:10px 0}}section h3{{margin:0 0 6px;font-size:16px}}section p{{margin:0}}.note{{border-left:4px solid #d29922}}.expert{{border-left-color:#3fb950}}</style></head><body><main><h1>{e(t['symbol'])} — Fundamental Intelligence Report</h1><p>{e(name)} · Profil: {e(p)} · Sektör: {e(sec)} · Endüstri: {e(ind)} · {e(gen)}</p><div class="grid">{''.join(cards)}</div><h2>Profesyonel Genel Değerlendirme</h2><div class="note expert">{e(overall(t,p,s,perf,history,validation))}</div>{history_html(history)}{validation_html(validation)}<h2>Kategori Özeti</h2><div class="table"><table><tr><th>Kategori</th><th>Mutlak</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(cr)}</table></div><h2>Tüm Finansal Faktörler</h2><div class="note">Karşılaştırma sabit emsal sayısıyla değil, güncel tam BIST evreninden otomatik sektör/endüstri, BIST100 ve tüm BIST dağılımlarıyla yapılır. 100 puan göreli olarak daha avantajlı konumu gösterir.</div><div class="table"><table><tr><th>Metrik</th><th>{e(t['symbol'])}</th><th>Mutlak</th><th>Endüstri</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(rows)}</table></div><h2>Faktör Bazlı Uzman Yorumları</h2>{''.join(blocks)}<h2>BIST100 Fiyat Relatif Performansı</h2><div class="table"><table><tr><th>Dönem</th><th>{e(t['symbol'])}</th><th>XU100</th><th>Alfa</th></tr>{''.join(pr)}</table></div><h2>Kapsam</h2><div class="grid"><div class="card"><small>BIST Pay/Kotasyon</small><b>{g.get('raw_count','N/A')}</b></div><div class="card"><small>Benzersiz BIST Şirketi</small><b>{len(g['all'])}</b></div><div class="card"><small>Sektör</small><b>{len(g['sector'])}</b><span>{e(sec)}</span></div><div class="card"><small>Endüstri</small><b>{len(g['industry'])}</b><span>{e(ind)}</span></div><div class="card"><small>BIST100 üyeleri</small><b>{len(xset) if xset else 'N/A'}</b></div></div><p class="note">Eksik veri uydurulmaz. Mutlak referans bantları evrensel kesinlik değil, finansal oran mantığı + profil kalibrasyonudur. GYO/Holding için PD/DD gerçek NAD iskontosu değildir. Araştırma amaçlıdır; yatırım tavsiyesi değildir.</p></main></body></html>'''
 
 def borsapy_target_context(sym,p):
     """BIST-specific deep context for the selected stock.
@@ -637,7 +653,7 @@ def main():
     hp.write_text(html_report(t,p,an,sc,g,xs,ip,cm,gen,hist,valid),encoding="utf-8")
     jp.write_text(json.dumps(safe({"symbol":sym,"target":t,"profile":p,"metrics":an,"scores":sc,"xu100_count":len(xs),"index_performance":ip,"historical_analysis":hist,"source_validation":valid,"comments":cm,"overall":overall(t,p,sc,ip,hist,valid),"generated_at":gen}),ensure_ascii=False,indent=2),encoding="utf-8")
     g["all"].to_csv(cp,index=False,encoding="utf-8-sig")
-    print(f"[10/10] Hazır: BIST={len(g['all'])}, sektör={len(g['sector'])}, endüstri={len(g['industry'])}, XU100={len(xs) if xs else 'N/A'}, veri güveni={valid.get('confidence')}")
+    print(f"[10/10] Hazır: BIST pay={g.get('raw_count')}, benzersiz şirket={len(g['all'])}, sektör={len(g['sector'])}, endüstri={len(g['industry'])}, XU100={len(xs) if xs else 'N/A'}, veri güveni={valid.get('confidence')}")
     print(hp); print(jp); print(cp)
 
 if __name__=="__main__":main()
