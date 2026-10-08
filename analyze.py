@@ -66,7 +66,7 @@ OVR={
     "Finansal":{"pe":("low",6,18),"pb":("low",0.8,3.5),"roe":("high",10,25),"roa":("high",1.5,6),"eps_g":("high",0,30),"ni_g":("high",0,30)},
     "Savunma/Teknoloji":{"pe":("low",18,55),"pb":("low",2,8),"ev":("low",10,30),"roe":("high",10,25),"roa":("high",4,12),"rev_g":("high",5,40),"eps_g":("high",5,50)},
 }
-FINANCIAL_SKIP={"ev","pfcf","roic","gross","opm","ebitdam","rev_g","curr","quick","de","nde","fcfm","pio"}
+FINANCIAL_SKIP={"ev","pfcf","roic","gross","opm","netm","ebitdam","rev_g","curr","quick","de","nde","fcfm","pio"}
 BANK_SKIP=set(FINANCIAL_SKIP)
 INS_SKIP=set(FINANCIAL_SKIP)
 OTHER_FIN_SKIP=set(FINANCIAL_SKIP)
@@ -401,6 +401,38 @@ def apply_profile_primary_source(a,p,history,g):
             x["abs"]=abs_score(provider,band(k,p)) if x["scoreable"] and provider is not None else None
             for gn in ["industry","sector","xu100","bist"]:
                 x["groups"][gn]["pct"]=pct(g[gn],k,provider) if provider is not None and x["app"] and (econ if k in {"pe","pb","ev","pfcf"} else True) else None
+
+    # Target-company operating fundamentals should come from the same
+    # İş Yatırım financial statements used for the deep history whenever the
+    # metric can be reconstructed reliably. TradingView remains the benchmark
+    # distribution source; raw provider values are retained for reconciliation.
+    HIST_PRIMARY_MAP={
+        "rev_g":("revenue_ttm_yoy",1.0,"İş Yatırım Mali Tablo (TTM)"),
+        "ni_g":("net_income_ttm_yoy",1.0,"İş Yatırım Mali Tablo (TTM)"),
+        "gross":("ttm_gross_margin",1.0,"İş Yatırım Mali Tablo (TTM)"),
+        "opm":("ttm_operating_margin",1.0,"İş Yatırım Mali Tablo (TTM)"),
+        "netm":("ttm_net_margin",1.0,"İş Yatırım Mali Tablo (TTM)"),
+        "fcfm":("fcf_margin",1.0,"İş Yatırım Mali Tablo (TTM)"),
+        "curr":("current_ratio",1.0,"İş Yatırım Mali Tablo"),
+        "eq_assets":("equity_to_assets",0.01,"İş Yatırım Mali Tablo"),
+    }
+    hs=history.get("summary",{})
+    for k,(hkey,mult,src) in HIST_PRIMARY_MAP.items():
+        if k not in a or not a[k].get("app",True):
+            continue
+        hv=fnum(hs.get(hkey))
+        if hv is None:
+            continue
+        value=hv*mult
+        x=a[k]
+        x["v"]=value
+        x["source"]=src
+        econ=economically_valid(k,value) if k in {"pe","pb","ev","pfcf"} else True
+        x["economic_valid"]=econ
+        x["scoreable"]=scoreable(k,p) and econ
+        x["abs"]=abs_score(value,band(k,p)) if x["scoreable"] else None
+        for gn in ["industry","sector","xu100","bist"]:
+            x["groups"][gn]["pct"]=pct(g[gn],k,value) if x["app"] and econ else None
 
     # Accounting denominator guard. Negative/zero equity can create extreme ROE,
     # P/B and Debt/Equity values that are mathematically defined by a provider but
