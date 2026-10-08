@@ -43,6 +43,9 @@ jobs:
       - name: AKBNK banka/UFRS testi
         run: python analyze.py AKBNK
 
+      - name: ALBRK katılım bankası testi
+        run: python analyze.py ALBRK
+
       - name: EKGYO GYO/NAD testi
         run: python analyze.py EKGYO
 
