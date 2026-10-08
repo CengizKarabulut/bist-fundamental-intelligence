@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from analyze import profile
+from analyze import profile, apply_profile_primary_source
 
 R = Path("reports")
 
@@ -28,6 +28,20 @@ def main():
     assert profile({"description":"Turkiye Sinai Kalkinma Bankasi A.S.","industry":"Investment Banks/Brokers","sector":"Finance"}) == "Banka"
     assert profile({"description":"Adra Gayrimenkul Yatirim Ortakligi A.S.","industry":"Financial Conglomerates","sector":"Finance"}) == "GYO"
     assert profile({"description":"Gozde Girisim Sermayesi Yatirim Ortakligi A.S.","industry":"Investment Banks/Brokers","sector":"Finance"}) == "Yatırım Ortaklığı"
+
+    # Negative-equity denominator guard must prevent misleading ratio scores.
+    dummy={
+        "roe":{"scoreable":True,"abs":100.0},
+        "pb":{"scoreable":True,"abs":100.0},
+        "de":{"scoreable":True,"abs":100.0},
+        "eq_assets":{"scoreable":True,"abs":0.0},
+    }
+    guarded=apply_profile_primary_source(
+        dummy,"Genel",{"summary":{"equity":-1.0}},{}
+    )
+    for k in ("roe","pb","de","eq_assets"):
+        assert guarded[k]["scoreable"] is False, (k,guarded[k])
+        assert guarded[k]["abs"] is None, (k,guarded[k])
 
     ase = load("ASELS")
     akb = load("AKBNK")
