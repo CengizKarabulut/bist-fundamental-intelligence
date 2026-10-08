@@ -9,7 +9,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="BIST Fundamental Intelligence release quality gate")
     ap.add_argument("--summary", default="audit_summary/full_bist_audit_summary.json")
     ap.add_argument("--min-universe", type=int, default=600)
-    ap.add_argument("--min-xu100", type=int, default=95)
+    ap.add_argument("--min-xu100", type=int, default=100)
     args = ap.parse_args()
 
     path = Path(args.summary)
