@@ -1,0 +1,3 @@
+Full BIST deep audit trigger
+Engine revision: financial-profile-v2 + non-equity-filter
+Date: 2026-10-08
