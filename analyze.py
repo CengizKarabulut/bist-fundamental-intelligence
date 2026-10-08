@@ -169,6 +169,19 @@ def scoreable(k,p):
     if p=="Yatırım Ortaklığı" and k in YORT_NONSCORE:return False
     return True
 
+def economically_valid(k,v):
+    """Return whether a metric is economically valid for scoring.
+
+    Negative/zero valuation multiples are not "cheap": they usually mean a
+    non-positive denominator (loss, negative equity or negative EBITDA/FCF).
+    They may still be displayed as raw provider values, but never score.
+    """
+    if v is None:
+        return False
+    if k in {"pe","pb","ev","pfcf"}:
+        return float(v) > 0
+    return True
+
 def band(k,p): return OVR.get(p,{}).get(k) or BANDS.get(k)
 
 def abs_score(v,b):
@@ -347,14 +360,17 @@ def analyze(t,p,g):
             source="TradingView"
 
         app=applicable(k,p)
-        scr=scoreable(k,p)
+        econ= economically_valid(k,v) if v is not None else False
+        scr=scoreable(k,p) and (econ if k in {"pe","pb","ev","pfcf"} else True)
         a=abs_score(v,band(k,p)) if scr and v is not None else None
         gs={}
         for n in ["industry","sector","xu100","bist"]:
-            gs[n]={"median":med(g[n],k),"pct":pct(g[n],k,v) if app and v is not None else None,"n":len(vals(g[n],k))}
+            rel_ok=app and v is not None and (econ if k in {"pe","pb","ev","pfcf"} else True)
+            gs[n]={"median":med(g[n],k),"pct":pct(g[n],k,v) if rel_ok else None,"n":len(vals(g[n],k))}
         out[k]={
             "label":label,"cat":cat,"dir":direction,"kind":kind,"w":weight,
             "v":v,"raw_v":tv_v,"source":source,"app":app,"scoreable":scr,
+            "economic_valid":econ if k in {"pe","pb","ev","pfcf"} else True,
             "abs":a,"groups":gs
         }
     return out
@@ -375,10 +391,12 @@ def apply_profile_primary_source(a,p,history,g):
             x=a[k]
             x["v"]=provider
             x["source"]="İş Yatırım" if provider is not None else "İş Yatırım (A/D)"
-            x["scoreable"]=scoreable(k,p)
+            econ=economically_valid(k,provider) if provider is not None else False
+            x["economic_valid"]=econ if k in {"pe","pb","ev","pfcf"} else True
+            x["scoreable"]=scoreable(k,p) and (econ if k in {"pe","pb","ev","pfcf"} else True)
             x["abs"]=abs_score(provider,band(k,p)) if x["scoreable"] and provider is not None else None
             for gn in ["industry","sector","xu100","bist"]:
-                x["groups"][gn]["pct"]=pct(g[gn],k,provider) if provider is not None and x["app"] else None
+                x["groups"][gn]["pct"]=pct(g[gn],k,provider) if provider is not None and x["app"] and (econ if k in {"pe","pb","ev","pfcf"} else True) else None
 
     # Accounting denominator guard. Negative/zero equity can create extreme ROE,
     # P/B and Debt/Equity values that are mathematically defined by a provider but
@@ -451,6 +469,12 @@ def factor_comment(x,p):
         return (
             f"{x['label']} {fmt(x['v'],x['kind'])}. {p} profili için ana değerlendirme "
             "kriteri değildir ve skora dahil edilmedi."
+        )
+
+    if x["cat"]=="Değerleme" and not x.get("economic_valid",True):
+        return (
+            f"{x['label']} {fmt(x['v'],x['kind'])} ({source}). Negatif/sıfır değerleme çarpanı ucuzluk olarak yorumlanmaz; "
+            "paydanın negatif veya ekonomik olarak anlamsız olması nedeniyle bu metrik skor ve yüzdelik hesabına alınmadı."
         )
 
     pr=x["groups"]["industry"] if x["groups"]["industry"]["n"]>=4 else x["groups"]["sector"]
