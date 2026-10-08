@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import time
+import signal
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,37 @@ from analyze import (
 from history_engine import build_historical_analysis
 
 OUT = Path("audit")
+
+
+class SymbolAuditTimeout(TimeoutError):
+    pass
+
+
+def _audit_alarm(signum, frame):
+    raise SymbolAuditTimeout("symbol audit exceeded 60 seconds")
+
+
+signal.signal(signal.SIGALRM, _audit_alarm)
+
+
+def audited_history(symbol: str, p: str) -> dict[str, Any]:
+    """Five periods = current TTM plus same-quarter prior-year audit context.
+
+    İş Yatırım allows five periods per API request, so this keeps one request per
+    statement and avoids a slow second batch during the 600+ company sweep.
+    """
+    signal.alarm(60)
+    try:
+        return build_historical_analysis(
+            symbol,
+            p,
+            report_dir=None,
+            quarterly_periods=5,
+            annual_periods=0,
+            load_market_info=False,
+        )
+    finally:
+        signal.alarm(0)
 
 
 def expected_reporting_floor(now: datetime | None = None) -> str:
@@ -208,26 +240,12 @@ def audit_one(
         issue_codes.append("INDEX_XHOLD_PROFILE_REVIEW")
 
     try:
-        hist = build_historical_analysis(
-            sym,
-            p,
-            report_dir=None,
-            quarterly_periods=8,
-            annual_periods=0,
-            load_market_info=False,
-        )
+        hist = audited_history(sym,p)
         # One controlled retry separates structural/model failures from transient
         # provider/network errors during the 600+ company sweep.
         if hist.get("error"):
-            time.sleep(1.0)
-            retry = build_historical_analysis(
-                sym,
-                p,
-                report_dir=None,
-                quarterly_periods=8,
-                annual_periods=0,
-                load_market_info=False,
-            )
+            time.sleep(0.5)
+            retry = audited_history(sym,p)
             if not retry.get("error"):
                 hist = retry
             else:
