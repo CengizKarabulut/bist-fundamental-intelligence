@@ -71,7 +71,7 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         hist={"error":f"{type(exc).__name__}: {exc}"}
 
     try:
-        g=eng.groups(universe_df,row,xu100_set)
+        g=eng.groups(universe_df,row,xu100_set,profile)
         metrics=eng.analyze(row,profile,g)
         metrics=eng.apply_profile_primary_source(metrics,profile,hist,g)
         scores=eng.scores(metrics,profile)
