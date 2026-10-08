@@ -252,30 +252,38 @@ def analyze(t,p,g):
     return out
 
 def apply_profile_primary_source(a,p,history,g):
-    """Use profile-appropriate primary data for the selected stock.
-
-    For GYOs, İş Yatırım's realised company-card valuation fields take priority.
-    An explicit A/D (None) is preserved instead of silently falling back to a
-    TradingView ratio that İş Yatırım considers economically meaningless.
-    Cross-sectional medians remain TradingView and are therefore descriptive only
-    for these mixed-source GYO valuation fields.
-    """
-    if p!="GYO" or not history or history.get("error") or history.get("metadata_warning"):
+    """Apply profile-specific primary sources and accounting sanity guards."""
+    if not history or history.get("error"):
         return a
 
-    market=history.get("market",{})
-    mapping={"pe":"pe","pb":"pb","ev":"ev_ebitda","div":"dividend_yield"}
-    for k,mkey in mapping.items():
-        if k not in a or mkey not in market:
-            continue
-        provider=fnum(market.get(mkey))
-        x=a[k]
-        x["v"]=provider
-        x["source"]="İş Yatırım" if provider is not None else "İş Yatırım (A/D)"
-        x["scoreable"]=scoreable(k,p)
-        x["abs"]=abs_score(provider,band(k,p)) if x["scoreable"] and provider is not None else None
-        for gn in ["industry","sector","xu100","bist"]:
-            x["groups"][gn]["pct"]=pct(g[gn],k,provider) if provider is not None and x["app"] else None
+    # GYO realised valuation: İş Yatırım company-card data takes priority.
+    if p=="GYO" and not history.get("metadata_warning"):
+        market=history.get("market",{})
+        mapping={"pe":"pe","pb":"pb","ev":"ev_ebitda","div":"dividend_yield"}
+        for k,mkey in mapping.items():
+            if k not in a or mkey not in market:
+                continue
+            provider=fnum(market.get(mkey))
+            x=a[k]
+            x["v"]=provider
+            x["source"]="İş Yatırım" if provider is not None else "İş Yatırım (A/D)"
+            x["scoreable"]=scoreable(k,p)
+            x["abs"]=abs_score(provider,band(k,p)) if x["scoreable"] and provider is not None else None
+            for gn in ["industry","sector","xu100","bist"]:
+                x["groups"][gn]["pct"]=pct(g[gn],k,provider) if provider is not None and x["app"] else None
+
+    # Accounting denominator guard. Negative/zero equity can create extreme ROE,
+    # P/B and Debt/Equity values that are mathematically defined by a provider but
+    # economically unsuitable for a normal quality score.
+    hs=history.get("summary",{})
+    equity=fnum(hs.get("equity"))
+    if p!="Banka" and equity is not None and equity <= 0:
+        for k in ["roe","pb","de","eq_assets"]:
+            if k in a:
+                a[k]["scoreable"]=False
+                a[k]["abs"]=None
+                a[k]["score_exclusion_reason"]="Negatif/sıfır özkaynak nedeniyle oran normal kalite puanına alınmadı."
+
     return a
 
 def scores(a):
@@ -341,10 +349,13 @@ def factor_comment(x,p):
     name="endüstri" if x["groups"]["industry"]["n"]>=4 else "sektör"
 
     if not x.get("scoreable",True):
+        reason=x.get("score_exclusion_reason")
         s=(
             f"{x['label']} {fmt(x['v'],x['kind'])} ({source}). Bu oran {p} profilinde "
             "karşılaştırmalı bilgi olarak gösterilir ancak ana skora dahil edilmez."
         )
+        if reason:
+            s+=" "+reason
         if p=="GYO" and x["cat"]=="Değerleme":
             s+=" GYO değerlemesinde gerçek NAD/PD-NAD, portföy ekspertiz değerleri ve proje yapısı daha belirleyicidir."
         elif p=="Holding" and x["cat"]=="Değerleme":
@@ -367,6 +378,18 @@ def factor_comment(x,p):
     b=x["groups"]["bist"]
     if b["median"] is not None and b["n"]>=20:
         s+=f" Tüm BIST medyanı {fmt(b['median'],x['kind'])}; göreli konum {b['pct']:.0f}/100."
+
+    metric_key=next((k for k,v in M.items() if v[1]==x["label"]),None)
+    if metric_key in {"rev_g","eps_g","ni_g"} and abs(x["v"])>300:
+        s+=" Büyüme oranı çok yüksek baz etkisi taşıyor; mutlak yüzde tek başına sürdürülebilir büyüme kabul edilmedi."
+    if metric_key in {"gross","opm","netm","ebitdam","fcfm"} and abs(x["v"])>200:
+        s+=" Oranın aşırı seviyesi düşük/oynak payda etkisine işaret edebilir; mali tablo kalemleriyle teyit edilmelidir."
+    if metric_key=="roe" and abs(x["v"])>300:
+        s+=" ROE'nin aşırı seviyesi özkaynak tabanının küçüklüğü/negatifliği açısından ayrıca kontrol edilmelidir."
+    if metric_key=="pe" and x["v"]>200:
+        s+=" Çok yüksek F/K, düşük kâr paydasının çarpanı bozduğu bir fiyatlama yapısına işaret edebilir."
+    if metric_key=="curr" and x["v"]>100:
+        s+=" Aşırı yüksek cari oran çok düşük kısa vadeli yükümlülük paydasından kaynaklanabilir."
     return s
 
 def index_perf():
