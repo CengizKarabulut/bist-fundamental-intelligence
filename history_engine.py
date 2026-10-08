@@ -20,10 +20,12 @@ INCOME_ROWS = {
     "operating_profit": [
         "FAALİYET KARI (ZARARI)", "Faaliyet Karı", "Faaliyet Kârı",
         "Esas Faaliyet Karı", "Esas Faaliyet Kârı",
+        "XI. NET FAALİYET KARI/ZARARI (VIII-IX-X)",
     ],
     "net_income": [
         "Ana Ortaklık Payları", "Net Dönem Karı", "Dönem Net Kar",
         "DÖNEM KARI (ZARARI)", "SÜRDÜRÜLEN FAALİYETLER DÖNEM KARI",
+        "XXIII. NET DÖNEM KARI/ZARARI (XVII+XXII)",
     ],
     "depreciation": [
         "Amortisman Giderleri", "Amortisman ve İtfa Giderleri",
@@ -36,10 +38,12 @@ INCOME_ROWS = {
     "net_interest_income": [
         "Net Faiz Geliri", "Net Faiz Gelirleri",
         "Faiz Gelirleri, Net",
+        "III. NET FAİZ GELİRİ/GİDERİ (I - II)",
     ],
     "fee_income": [
         "Net Ücret ve Komisyon Gelirleri",
         "Ücret ve Komisyon Gelirleri, Net",
+        "IV. NET ÜCRET VE KOMİSYON GELİRLERİ/GİDERLERİ",
     ],
 }
 
@@ -47,21 +51,23 @@ BALANCE_ROWS = {
     "cash": [
         "Nakit ve Nakit Benzerleri",
         "Nakit ve Nakit Benzeri Varlıklar",
+        "I. NAKİT DEĞERLER VE MERKEZ BANKASI",
     ],
     "current_assets": ["Dönen Varlıklar"],
     "current_liabilities": ["Kısa Vadeli Yükümlülükler"],
-    "total_assets": ["Toplam Varlıklar", "TOPLAM AKTİFLER", "Toplam Aktifler"],
+    "total_assets": ["Toplam Varlıklar", "TOPLAM AKTİFLER", "Toplam Aktifler", "AKTİF TOPLAMI"],
     "equity": [
         "Özkaynaklar", "Toplam Özkaynaklar",
         "Ana Ortaklığa Ait Özkaynaklar",
+        "XVI. ÖZKAYNAKLAR",
     ],
     "loans": [
         "Krediler", "Krediler ve Alacaklar",
-        "Nakdi Krediler",
+        "Nakdi Krediler", "VI. KREDİLER",
     ],
     "deposits": [
         "Mevduat", "Toplam Mevduat",
-        "Mevduatlar",
+        "Mevduatlar", "I. MEVDUAT",
     ],
 }
 
@@ -364,10 +370,42 @@ def _build_commentary(summary: dict[str, Any], profile: str) -> dict[str, Any]:
             )
         eq_yoy = summary.get("equity_yoy")
         assets_yoy = summary.get("assets_yoy")
-        if eq_yoy is not None and assets_yoy is not None:
+        loans_yoy = summary.get("loans_yoy")
+        dep_yoy = summary.get("deposits_yoy")
+        nii_yoy = summary.get("net_interest_income_yoy")
+        fee_yoy = summary.get("fee_income_yoy")
+        eq_assets = summary.get("equity_to_assets")
+
+        if eq_yoy is not None or assets_yoy is not None:
             paragraphs.append(
                 f"Özkaynak büyümesi {_fmt(eq_yoy,'%')}, aktif büyümesi {_fmt(assets_yoy,'%')}; "
                 "banka bilançosu sanayi şirketi borç/nakit metrikleriyle değerlendirilmedi."
+            )
+        if loans_yoy is not None or dep_yoy is not None:
+            paragraphs.append(
+                f"Kredi büyümesi {_fmt(loans_yoy,'%')}, mevduat büyümesi {_fmt(dep_yoy,'%')}."
+            )
+            if loans_yoy is not None and dep_yoy is not None:
+                gap=loans_yoy-dep_yoy
+                if gap>10:
+                    watch.append(
+                        f"Kredi büyümesi mevduat büyümesini {gap:.1f} puan aşıyor; fonlama yapısı ve kredi/mevduat dengesi izlenmeli."
+                    )
+                elif gap<-10:
+                    strengths.append(
+                        f"Mevduat büyümesi kredi büyümesinin {abs(gap):.1f} puan üzerinde; fonlama tabanı görece destekleyici."
+                    )
+        if nii_yoy is not None:
+            (strengths if nii_yoy>15 else risks if nii_yoy<0 else watch).append(
+                f"Net faiz geliri yıllık {_fmt(nii_yoy,'%')} değişti."
+            )
+        if fee_yoy is not None:
+            (strengths if fee_yoy>15 else risks if fee_yoy<0 else watch).append(
+                f"Net ücret/komisyon geliri yıllık {_fmt(fee_yoy,'%')} değişti."
+            )
+        if eq_assets is not None:
+            (strengths if eq_assets>=10 else risks if eq_assets<7 else watch).append(
+                f"Özkaynak/aktif oranı {_fmt(eq_assets,'%')}."
             )
         return {"paragraphs": paragraphs, "strengths": strengths, "risks": risks, "watch": watch}
 
@@ -684,45 +722,81 @@ def build_historical_analysis(symbol: str, profile: str, report_dir: Path | None
             "current_ratio_yoy_change": _pp_change(current_ratio_now, current_ratio_old),
         }
 
-        # Bank-specific balance growth metrics.
+        # Bank-specific operating / balance growth metrics.
         loans_now, loans_old = _same_quarter_year_ago(balance.get("loans", pd.Series(dtype=float)))
         dep_now, dep_old = _same_quarter_year_ago(balance.get("deposits", pd.Series(dtype=float)))
+        nii_now, nii_old = _same_quarter_year_ago(income.get("net_interest_income", pd.Series(dtype=float)))
+        fee_now, fee_old = _same_quarter_year_ago(income.get("fee_income", pd.Series(dtype=float)))
+
         summary["loans_yoy"] = _pct_change(loans_now, loans_old)
         summary["deposits_yoy"] = _pct_change(dep_now, dep_old)
+        summary["net_interest_income_yoy"] = _pct_change(nii_now, nii_old)
+        summary["fee_income_yoy"] = _pct_change(fee_now, fee_old)
+        summary["equity_to_assets"] = _safe_ratio(equity_now, assets_now, 100.0)
 
         result["summary"] = summary
 
         # Detail table: newest first, maximum 8 periods for report readability.
-        periods = sorted(
-            set(revenue.index) | set(net_income.index) | set(net_margin.index) |
-            set(operating_margin.index) | set(ocf_d.index),
-            key=_qkey,
-            reverse=True,
-        )[:8]
+        if profile == "Banka":
+            nii = income.get("net_interest_income", pd.Series(dtype=float))
+            fee = income.get("fee_income", pd.Series(dtype=float))
+            periods = sorted(
+                set(net_income.index) | set(nii.index) | set(fee.index) |
+                set(balance.get("loans", pd.Series(dtype=float)).index) |
+                set(balance.get("deposits", pd.Series(dtype=float)).index),
+                key=_qkey,
+                reverse=True,
+            )[:8]
+        else:
+            periods = sorted(
+                set(revenue.index) | set(net_income.index) | set(net_margin.index) |
+                set(operating_margin.index) | set(ocf_d.index),
+                key=_qkey,
+                reverse=True,
+            )[:8]
+
         rows = []
         for period in periods:
-            rows.append({
+            row={
                 "period": str(period),
-                "revenue": float(revenue[period]) if period in revenue.index else None,
-                "revenue_yoy": revenue_yoy.get(str(period)),
                 "net_income": float(net_income[period]) if period in net_income.index else None,
                 "net_income_yoy": profit_yoy.get(str(period)),
-                "gross_margin": float(gross_margin[period]) if period in gross_margin.index else None,
-                "operating_margin": float(operating_margin[period]) if period in operating_margin.index else None,
-                "net_margin": float(net_margin[period]) if period in net_margin.index else None,
-                "operating_cash_flow_discrete": float(ocf_d[period]) if period in ocf_d.index else None,
-            })
+            }
+            if profile == "Banka":
+                nii=income.get("net_interest_income", pd.Series(dtype=float))
+                fee=income.get("fee_income", pd.Series(dtype=float))
+                loans=balance.get("loans", pd.Series(dtype=float))
+                deposits=balance.get("deposits", pd.Series(dtype=float))
+                row.update({
+                    "net_interest_income": float(nii[period]) if period in nii.index else None,
+                    "fee_income": float(fee[period]) if period in fee.index else None,
+                    "loans": float(loans[period]) if period in loans.index else None,
+                    "deposits": float(deposits[period]) if period in deposits.index else None,
+                })
+            else:
+                row.update({
+                    "revenue": float(revenue[period]) if period in revenue.index else None,
+                    "revenue_yoy": revenue_yoy.get(str(period)),
+                    "gross_margin": float(gross_margin[period]) if period in gross_margin.index else None,
+                    "operating_margin": float(operating_margin[period]) if period in operating_margin.index else None,
+                    "net_margin": float(net_margin[period]) if period in net_margin.index else None,
+                    "operating_cash_flow_discrete": float(ocf_d[period]) if period in ocf_d.index else None,
+                })
+            rows.append(row)
         result["quarterly"] = rows
 
-        found_core = sum(
-            1 for k in ["revenue", "net_income", "total_assets", "equity"] if k in found
+        core_keys = (
+            ["net_income", "total_assets", "equity", "loans", "deposits"]
+            if profile == "Banka"
+            else ["revenue", "net_income", "total_assets", "equity"]
         )
+        found_core = sum(1 for k in core_keys if k in found)
         found_cash = sum(
             1 for k in ["operating_cash_flow", "capex"] if k in found
         )
         result["data_quality"] = {
             "core_rows_found": found_core,
-            "core_rows_expected": 4,
+            "core_rows_expected": len(core_keys),
             "cashflow_rows_found": found_cash if profile != "Banka" else None,
             "quarterly_periods": len(latest_periods),
             "annual_periods": max(len(annual_rev), len(annual_ni)),
