@@ -109,10 +109,31 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         if key in metrics and metrics[key].get("scoreable"):
             add_issue(issues,"ERROR","PROFILE_NONSCORE",f"{profile}: {key} scoreable=True")
 
-    if profile=="GYO" and scores.get("valuation") is not None:
-        add_issue(issues,"CRITICAL","GYO_VALUATION_SCORE","GYO için klasik değerleme skoru üretilmiş.")
+    if profile=="GYO":
+        if scores.get("valuation") is not None:
+            add_issue(issues,"CRITICAL","GYO_VALUATION_SCORE","GYO için klasik değerleme skoru üretilmiş.")
+        if scores.get("composite") is not None:
+            add_issue(issues,"CRITICAL","GYO_COMPOSITE_WITHOUT_NAV","NAD dışı metriklerden tam bileşik GYO skoru üretilmiş.")
+
+    if profile in {"Holding","Yatırım Ortaklığı"}:
+        if any(scores.get(k) is not None for k in ("quality","valuation","composite")):
+            add_issue(
+                issues,"CRITICAL","NAV_PROFILE_GENERIC_SCORE",
+                f"{profile}: NAV/portföy yerine generic kalite/değerleme skoru üretilmiş."
+            )
+        bad=[k for k,x in metrics.items() if x.get("scoreable")]
+        if bad:
+            add_issue(
+                issues,"ERROR","NAV_PROFILE_SCOREABLE_METRICS",
+                f"{profile}: scoreable={','.join(bad)}"
+            )
+
     if profile=="Banka" and metrics.get("fcfm",{}).get("app"):
         add_issue(issues,"CRITICAL","BANK_FCF_ACTIVE","Banka profilinde FCF metriği aktif.")
+    if profile=="Sigorta" and metrics.get("eq_assets",{}).get("app"):
+        add_issue(issues,"CRITICAL","INSURANCE_FAKE_SOLVENCY","Sigortada özkaynak/aktif solvency skoru gibi kullanılmış.")
+    if profile in {"Banka","Sigorta","Finansal"} and metrics.get("netm",{}).get("app"):
+        add_issue(issues,"CRITICAL","FINANCE_NET_MARGIN_ACTIVE",f"{profile}: sanayi tipi net marj aktif.")
 
     # 3) Historical statement/data-quality checks.
     if hist.get("error"):
