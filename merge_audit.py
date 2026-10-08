@@ -129,6 +129,16 @@ def main() -> None:
             f"- **Sigorta özel motoru:** {issue_counter['INSURANCE_SPECIAL_MODEL_REVIEW']} sigorta şirketi "
             "sanayi tipi tarihsel tablo mantığından ayrıca ayrıştırılmalı."
         )
+    if issue_counter["NONBANK_FINANCIAL_MODEL_REVIEW"]:
+        suggestions.append(
+            f"- **Banka dışı finansal özel motor:** {issue_counter['NONBANK_FINANCIAL_MODEL_REVIEW']} şirket "
+            "aracı kurum/faktoring/leasing/varlık yönetimi mantığıyla ayrıca kalibre edilmeli."
+        )
+    if issue_counter["INVESTMENT_TRUST_NAV_MODEL_PENDING"]:
+        suggestions.append(
+            f"- **Yatırım ortaklığı NAV motoru:** {issue_counter['INVESTMENT_TRUST_NAV_MODEL_PENDING']} şirket "
+            "portföy/NAV iskontosu üzerinden ayrıca değerlenmeli."
+        )
     if issue_counter["HOLDING_NAD_MODEL_PENDING"]:
         suggestions.append(
             f"- **Holding NAD motoru:** {issue_counter['HOLDING_NAD_MODEL_PENDING']} holding için "
