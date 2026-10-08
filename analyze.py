@@ -9,6 +9,7 @@ import pandas as pd
 import yfinance as yf
 import borsapy as bp
 from tradingview_screener import Query, col
+from history_engine import build_historical_analysis
 
 ROOT = Path(__file__).resolve().parent
 REPORTS = ROOT / "reports"
@@ -226,24 +227,211 @@ def index_perf():
             pass
     return {"3m":None,"6m":None,"12m":None}
 
-def overall(t,p,s,perf):
-    c=s["cats"]; words=[f"{t['symbol']} için temel kalite skoru {fmt(s['quality'])}/100, değerleme skoru {fmt(s['valuation'])}/100 ve bileşik temel skor {fmt(s['composite'])}/100 düzeyindedir."]
-    good=sorted([(k,v) for k,v in c.items() if k!="Değerleme" and v is not None and v>=65],key=lambda z:z[1],reverse=True)[:2]; bad=sorted([(k,v) for k,v in c.items() if k!="Değerleme" and v is not None and v<45],key=lambda z:z[1])[:2]
-    if good:words.append("Öne çıkan güçlü alanlar "+" ve ".join(f"{k.lower()} ({v:.0f}/100)" for k,v in good)+".")
-    if bad:words.append("Görece zayıf alanlar "+" ve ".join(f"{k.lower()} ({v:.0f}/100)" for k,v in bad)+".")
-    if s["valuation"] is not None:words.append("Değerleme tarafı ucuz değil ve risk ayrıca izlenmeli." if s["valuation"]<35 else "Değerleme şirket kalitesini destekliyor." if s["valuation"]>=65 else "Değerleme dengeli; kaliteyle birlikte okunmalı.")
-    rs=s["rel"]["sector"]["overall"]; rx=s["rel"]["xu100"]["overall"]; rb=s["rel"]["bist"]["overall"]
-    if rs is not None:words.append(f"Tüm sektör şirketlerine göre göreli temel skor {rs:.0f}/100.")
-    if rx is not None:words.append(f"BIST100 temel dağılımına göre {rx:.0f}/100, tüm BIST'e göre {rb:.0f}/100 seviyesinde.")
-    sp=fnum(t.get("Perf.Y")); xp=perf["12m"]
-    if sp is not None and xp is not None:words.append(f"Son 12 ay fiyat performansı BIST100'e göre {sp-xp:+.2f} puan relatif fark taşıyor.")
-    if p in {"GYO","Holding"}:words.append("PD/DD gerçek NAD iskontosu olarak kabul edilmez; NAD ayrıca sağlanmadıkça bu ayrım korunur.")
+def overall(t,p,s,perf,history=None):
+    c=s["cats"]
+    words=[
+        f"{t['symbol']} için temel kalite skoru {fmt(s['quality'])}/100, "
+        f"değerleme skoru {fmt(s['valuation'])}/100 ve bileşik temel skor "
+        f"{fmt(s['composite'])}/100 düzeyindedir."
+    ]
+
+    good=sorted(
+        [(k,v) for k,v in c.items() if k!="Değerleme" and v is not None and v>=65],
+        key=lambda z:z[1],reverse=True
+    )[:2]
+    bad=sorted(
+        [(k,v) for k,v in c.items() if k!="Değerleme" and v is not None and v<45],
+        key=lambda z:z[1]
+    )[:2]
+
+    if good:
+        words.append(
+            "Çapraz kesit ve mutlak oran setinde öne çıkan güçlü alanlar "
+            +" ve ".join(f"{k.lower()} ({v:.0f}/100)" for k,v in good)+"."
+        )
+    if bad:
+        words.append(
+            "Görece zayıf alanlar "
+            +" ve ".join(f"{k.lower()} ({v:.0f}/100)" for k,v in bad)+"."
+        )
+
+    if s["valuation"] is not None:
+        words.append(
+            "Değerleme çarpanları kalite skoruna kıyasla daha zayıf; güçlü şirket ile ucuz hisse ayrımı korunmalı."
+            if s["valuation"]<35 else
+            "Değerleme şirket kalitesini destekliyor; yine de sektör ve tarihsel bantlarla birlikte okunmalı."
+            if s["valuation"]>=65 else
+            "Değerleme dengeli bölgede; kalite ve büyümenin sürdürülebilirliğiyle birlikte değerlendirilmesi daha sağlıklı."
+        )
+
+    # Historical financial statement synthesis.
+    if history and not history.get("error"):
+        hs=history.get("summary",{})
+        period=hs.get("latest_period")
+        rev=hs.get("revenue_yoy")
+        ni=hs.get("net_income_yoy")
+        if p=="Banka":
+            if ni is not None:
+                words.append(
+                    f"{period or 'Son rapor dönemi'} net kârı yıllık {ni:+.1f}% değişim gösterdi."
+                )
+            ey=hs.get("equity_yoy")
+            ay=hs.get("assets_yoy")
+            if ey is not None or ay is not None:
+                words.append(
+                    f"Bilanço tarafında özkaynak büyümesi {fmt(ey,'%')}, aktif büyümesi {fmt(ay,'%')}; "
+                    "banka profili için sanayi tipi net borç/FCF metrikleri ana karar setine alınmadı."
+                )
+        else:
+            if rev is not None or ni is not None:
+                words.append(
+                    f"{period or 'Son rapor dönemi'} finansallarında ciro yıllık {fmt(rev,'%')}, "
+                    f"net kâr {fmt(ni,'%')} değişti."
+                )
+            nm=hs.get("net_margin_yoy_pp")
+            om=hs.get("operating_margin_yoy_pp")
+            if nm is not None or om is not None:
+                words.append(
+                    f"Marj dinamiğinde net marj yıllık {fmt(nm,' puan')}, "
+                    f"faaliyet marjı {fmt(om,' puan')} değişim gösterdi."
+                )
+            conv=hs.get("cash_conversion")
+            fcfm=hs.get("fcf_margin")
+            if conv is not None:
+                words.append(
+                    f"Kârın nakde dönüşümü TTM bazında {conv:.2f}x"
+                    + (f" ve FCF marjı {fcfm:.1f}%." if fcfm is not None else ".")
+                )
+            nd=hs.get("net_debt_yoy")
+            if nd is not None:
+                words.append(
+                    f"Net borcun yıllık değişimi {nd:+.1f}%; bu hareket bilanço riskinin yönü açısından ayrıca izlenmeli."
+                )
+
+        hc=history.get("commentary",{})
+        strengths=hc.get("strengths",[])
+        risks=hc.get("risks",[])
+        if strengths:
+            words.append("Tarihsel teyitte güçlü sinyaller: "+" ".join(strengths[:2]))
+        if risks:
+            words.append("Başlıca tarihsel risk/izleme alanları: "+" ".join(risks[:2]))
+
+    rs=s["rel"]["sector"]["overall"]
+    rx=s["rel"]["xu100"]["overall"]
+    rb=s["rel"]["bist"]["overall"]
+    if rs is not None:
+        words.append(f"Tüm sektör şirketlerine göre göreli temel skor {rs:.0f}/100.")
+    if rx is not None:
+        words.append(
+            f"BIST100 temel dağılımına göre {rx:.0f}/100"
+            +(f", tüm BIST'e göre {rb:.0f}/100." if rb is not None else ".")
+        )
+
+    sp=fnum(t.get("Perf.Y"))
+    xp=perf["12m"]
+    if sp is not None and xp is not None:
+        alpha=sp-xp
+        words.append(
+            f"Son 12 aylık fiyat performansı BIST100'e göre {alpha:+.2f} puan relatif fark taşıyor; "
+            +("fiyat davranışı temel görünümü destekliyor." if alpha>10 else
+              "fiyat davranışı temel görünümün gerisinde kalıyor." if alpha<-10 else
+              "relatif fiyatlama belirgin bir ayrışma üretmiyor.")
+        )
+
+    if p in {"GYO","Holding"}:
+        words.append(
+            "PD/DD gerçek NAD iskontosu olarak kabul edilmez; güncel NAD verisi ayrıca sağlanmadıkça "
+            "defter değeri ile net aktif değer birbirine eşitlenmez."
+        )
+
     return " ".join(words)
 
 def scoretxt(v):
     return "N/A" if v is None else f"{v:.0f}/100"
 
-def html_report(t,p,a,s,g,xset,perf,comments,gen):
+def _hist_num(v,suffix="",digits=1):
+    return "N/A" if v is None else f"{v:.{digits}f}{suffix}"
+
+def _hist_money(v):
+    if v is None:return "N/A"
+    a=abs(v)
+    if a>=1e12:return f"{v/1e12:.2f}T TL"
+    if a>=1e9:return f"{v/1e9:.2f}B TL"
+    if a>=1e6:return f"{v/1e6:.1f}M TL"
+    return f"{v:,.0f} TL"
+
+def history_html(history):
+    if not history:
+        return '<div class="note">Tarihsel mali tablo katmanı çalıştırılmadı.</div>'
+    if history.get("error"):
+        return f'<div class="note">Tarihsel mali tablo katmanı: {html.escape(str(history["error"]))}</div>'
+
+    e=lambda z:html.escape(str(z))
+    h=history.get("summary",{})
+    q=history.get("quarterly",[])
+    comm=history.get("commentary",{})
+    dq=history.get("data_quality",{})
+
+    cards=[
+        ("Son Rapor",h.get("latest_period") or "N/A",""),
+        ("Ciro YoY",_hist_num(h.get("revenue_yoy"),"%"),""),
+        ("Net Kâr YoY",_hist_num(h.get("net_income_yoy"),"%"),""),
+        ("Net Marj",_hist_num(h.get("net_margin"),"%"),""),
+        ("Nakit Dönüşümü",_hist_num(h.get("cash_conversion"),"x",2),""),
+        ("FCF Marjı",_hist_num(h.get("fcf_margin"),"%"),""),
+        ("Net Borç",_hist_money(h.get("net_debt")),""),
+        ("3Y Ciro CAGR",_hist_num(h.get("revenue_cagr_3y"),"%"),""),
+    ]
+    cards_html="".join(
+        f'<div class="card"><small>{e(n)}</small><b>{e(v)}</b><span>{e(s)}</span></div>'
+        for n,v,s in cards
+    )
+
+    rows=[]
+    for r in q:
+        rows.append(
+            "<tr>"
+            f"<td>{e(r.get('period',''))}</td>"
+            f"<td>{e(_hist_money(r.get('revenue')))}</td>"
+            f"<td>{e(_hist_num(r.get('revenue_yoy'),'%'))}</td>"
+            f"<td>{e(_hist_money(r.get('net_income')))}</td>"
+            f"<td>{e(_hist_num(r.get('net_income_yoy'),'%'))}</td>"
+            f"<td>{e(_hist_num(r.get('operating_margin'),'%'))}</td>"
+            f"<td>{e(_hist_num(r.get('net_margin'),'%'))}</td>"
+            f"<td>{e(_hist_money(r.get('operating_cash_flow_discrete')))}</td>"
+            "</tr>"
+        )
+
+    def list_html(items,cls):
+        if not items:return ""
+        return f'<div class="note {cls}"><ul>'+"".join(f"<li>{e(x)}</li>" for x in items)+"</ul></div>"
+
+    paragraphs="".join(
+        f"<p>{e(x)}</p>" for x in comm.get("paragraphs",[])
+    )
+    quality=(
+        f"Çekirdek satır kapsaması {dq.get('core_rows_found','N/A')}/{dq.get('core_rows_expected','N/A')} · "
+        f"Çeyrek sayısı {dq.get('quarterly_periods','N/A')} · "
+        f"Yıllık dönem sayısı {dq.get('annual_periods','N/A')}"
+    )
+
+    return (
+        '<h2>12 Çeyreklik Tarihsel Finansal Analiz</h2>'
+        f'<div class="grid">{cards_html}</div>'
+        f'<div class="note">{e(quality)}</div>'
+        f'<div class="note expert">{paragraphs or "Tarihsel yorum üretmek için yeterli veri yok."}</div>'
+        '<div class="history-lists">'
+        +list_html(comm.get("strengths",[]),"positive")
+        +list_html(comm.get("risks",[]),"negative")
+        +list_html(comm.get("watch",[]),"")
+        +'</div>'
+        '<div class="table"><table><tr>'
+        '<th>Dönem</th><th>Ciro/YTD</th><th>Ciro YoY</th><th>Net Kâr/YTD</th>'
+        '<th>Net Kâr YoY</th><th>Faaliyet Marjı</th><th>Net Marj</th><th>Çeyreklik OCF</th>'
+        '</tr>'+''.join(rows)+'</table></div>'
+    )
+
+def html_report(t,p,a,s,g,xset,perf,comments,gen,history=None):
     e=lambda z:html.escape(str(z)); cards=[]
     for n,v in [("Temel Kalite",s["quality"]),("Değerleme",s["valuation"]),("Bileşik",s["composite"]),("Sektör Relatif",s["rel"]["sector"]["overall"]),("BIST100 Relatif",s["rel"]["xu100"]["overall"]),("Tüm BIST Relatif",s["rel"]["bist"]["overall"])]:
         cards.append(f'<div class="card"><small>{e(n)}</small><b>{e(scoretxt(v))}</b><span>{e(status(v))}</span></div>')
@@ -273,7 +461,7 @@ def html_report(t,p,a,s,g,xset,perf,comments,gen):
         sp=fnum(t.get({"3m":"Perf.3M","6m":"Perf.6M","12m":"Perf.Y"}[k])); xp=perf[k]; al=sp-xp if sp is not None and xp is not None else None
         pr.append(f"<tr><td>{n}</td><td>{fmt(sp,'%')}</td><td>{fmt(xp,'%')}</td><td>{'N/A' if al is None else f'{al:+.2f} puan'}</td></tr>")
     sec=str(t.get('sector') or 'N/A'); ind=str(t.get('industry') or 'N/A'); name=str(t.get('description') or t.get('name') or t['symbol'])
-    return f'''<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(t['symbol'])} — BIST Fundamental Intelligence</title><style>body{{font-family:Arial;background:#0d1117;color:#e6edf3;margin:0;line-height:1.5}}main{{max-width:1500px;margin:auto;padding:28px}}small{{display:block;color:#8b949e}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}.card,section,.note{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px}}.card b{{display:block;font-size:26px}}.table{{overflow:auto;margin:18px 0}}table{{width:100%;min-width:1100px;border-collapse:collapse;background:#161b22}}th,td{{padding:9px;border:1px solid #30363d;text-align:right;vertical-align:top}}th:first-child,td:first-child{{text-align:left}}th{{background:#21262d}}section{{margin:10px 0}}section h3{{margin:0 0 6px;font-size:16px}}section p{{margin:0}}.note{{border-left:4px solid #d29922}}.expert{{border-left-color:#3fb950}}</style></head><body><main><h1>{e(t['symbol'])} — Fundamental Intelligence Report</h1><p>{e(name)} · Profil: {e(p)} · Sektör: {e(sec)} · Endüstri: {e(ind)} · {e(gen)}</p><div class="grid">{''.join(cards)}</div><h2>Profesyonel Genel Değerlendirme</h2><div class="note expert">{e(overall(t,p,s,perf))}</div><h2>Kategori Özeti</h2><div class="table"><table><tr><th>Kategori</th><th>Mutlak</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(cr)}</table></div><h2>Tüm Finansal Faktörler</h2><div class="note">Karşılaştırma sabit emsal sayısıyla değil, güncel tam BIST evreninden otomatik sektör/endüstri, BIST100 ve tüm BIST dağılımlarıyla yapılır. 100 puan göreli olarak daha avantajlı konumu gösterir.</div><div class="table"><table><tr><th>Metrik</th><th>{e(t['symbol'])}</th><th>Mutlak</th><th>Endüstri</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(rows)}</table></div><h2>Faktör Bazlı Uzman Yorumları</h2>{''.join(blocks)}<h2>BIST100 Fiyat Relatif Performansı</h2><div class="table"><table><tr><th>Dönem</th><th>{e(t['symbol'])}</th><th>XU100</th><th>Alfa</th></tr>{''.join(pr)}</table></div><h2>Kapsam</h2><div class="grid"><div class="card"><small>Tüm BIST</small><b>{len(g['all'])}</b></div><div class="card"><small>Sektör</small><b>{len(g['sector'])}</b><span>{e(sec)}</span></div><div class="card"><small>Endüstri</small><b>{len(g['industry'])}</b><span>{e(ind)}</span></div><div class="card"><small>BIST100 üyeleri</small><b>{len(xset) if xset else 'N/A'}</b></div></div><p class="note">Eksik veri uydurulmaz. Mutlak referans bantları evrensel kesinlik değil, finansal oran mantığı + profil kalibrasyonudur. GYO/Holding için PD/DD gerçek NAD iskontosu değildir. Araştırma amaçlıdır; yatırım tavsiyesi değildir.</p></main></body></html>'''
+    return f'''<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(t['symbol'])} — BIST Fundamental Intelligence</title><style>body{{font-family:Arial;background:#0d1117;color:#e6edf3;margin:0;line-height:1.5}}main{{max-width:1500px;margin:auto;padding:28px}}small{{display:block;color:#8b949e}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}.card,section,.note{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px}}.card b{{display:block;font-size:26px}}.table{{overflow:auto;margin:18px 0}}table{{width:100%;min-width:1100px;border-collapse:collapse;background:#161b22}}th,td{{padding:9px;border:1px solid #30363d;text-align:right;vertical-align:top}}th:first-child,td:first-child{{text-align:left}}th{{background:#21262d}}section{{margin:10px 0}}section h3{{margin:0 0 6px;font-size:16px}}section p{{margin:0}}.note{{border-left:4px solid #d29922}}.expert{{border-left-color:#3fb950}}</style></head><body><main><h1>{e(t['symbol'])} — Fundamental Intelligence Report</h1><p>{e(name)} · Profil: {e(p)} · Sektör: {e(sec)} · Endüstri: {e(ind)} · {e(gen)}</p><div class="grid">{''.join(cards)}</div><h2>Profesyonel Genel Değerlendirme</h2><div class="note expert">{e(overall(t,p,s,perf,history))}</div>{history_html(history)}<h2>Kategori Özeti</h2><div class="table"><table><tr><th>Kategori</th><th>Mutlak</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(cr)}</table></div><h2>Tüm Finansal Faktörler</h2><div class="note">Karşılaştırma sabit emsal sayısıyla değil, güncel tam BIST evreninden otomatik sektör/endüstri, BIST100 ve tüm BIST dağılımlarıyla yapılır. 100 puan göreli olarak daha avantajlı konumu gösterir.</div><div class="table"><table><tr><th>Metrik</th><th>{e(t['symbol'])}</th><th>Mutlak</th><th>Endüstri</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(rows)}</table></div><h2>Faktör Bazlı Uzman Yorumları</h2>{''.join(blocks)}<h2>BIST100 Fiyat Relatif Performansı</h2><div class="table"><table><tr><th>Dönem</th><th>{e(t['symbol'])}</th><th>XU100</th><th>Alfa</th></tr>{''.join(pr)}</table></div><h2>Kapsam</h2><div class="grid"><div class="card"><small>Tüm BIST</small><b>{len(g['all'])}</b></div><div class="card"><small>Sektör</small><b>{len(g['sector'])}</b><span>{e(sec)}</span></div><div class="card"><small>Endüstri</small><b>{len(g['industry'])}</b><span>{e(ind)}</span></div><div class="card"><small>BIST100 üyeleri</small><b>{len(xset) if xset else 'N/A'}</b></div></div><p class="note">Eksik veri uydurulmaz. Mutlak referans bantları evrensel kesinlik değil, finansal oran mantığı + profil kalibrasyonudur. GYO/Holding için PD/DD gerçek NAD iskontosu değildir. Araştırma amaçlıdır; yatırım tavsiyesi değildir.</p></main></body></html>'''
 
 def borsapy_target_context(sym,p):
     """BIST-specific deep context for the selected stock.
@@ -338,20 +526,21 @@ def safe(v):
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("symbol"); a=ap.parse_args(); sym=a.symbol.upper().replace("BIST:","").replace(".IS","").strip()
-    print("[1/8] Tüm BIST evreni alınıyor..."); u=universe(); h=u[u.symbol==sym]
+    print("[1/9] Tüm BIST evreni alınıyor..."); u=universe(); h=u[u.symbol==sym]
     if h.empty:raise SystemExit(f"{sym} bulunamadı")
     t=h.iloc[0].copy(); t["symbol"]=sym; p=profile(t)
-    print("[2/8] BIST100 üyeleri alınıyor..."); xs=xu100(u)
-    print("[3/8] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs); an=analyze(t,p,g); sc=scores(an)
-    print("[4/8] Her faktör yorumlanıyor..."); cm={k:factor_comment(v,p) for k,v in an.items()}
-    print("[5/8] XU100 performansı..."); ip=index_perf()
-    print("[6/8] BorsaPy/KAP ve hedef şirket mali tabloları doğrulanıyor..."); bpctx=borsapy_target_context(sym,p)
-    print("[7/8] Rapor hazırlanıyor..."); gen=datetime.now().isoformat(timespec="seconds"); REPORTS.mkdir(exist_ok=True)
+    print("[2/9] BIST100 üyeleri alınıyor..."); xs=xu100(u)
+    print("[3/9] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs); an=analyze(t,p,g); sc=scores(an)
+    print("[4/9] Her faktör yorumlanıyor..."); cm={k:factor_comment(v,p) for k,v in an.items()}
+    print("[5/9] XU100 performansı..."); ip=index_perf()
+    print("[6/9] BorsaPy/KAP ve 12 çeyreklik mali tablolar analiz ediliyor..."); REPORTS.mkdir(exist_ok=True); hist=build_historical_analysis(sym,p,REPORTS)
+    print("[7/9] Tarihsel büyüme, marj, nakit ve bilanço trendleri birleştiriliyor...")
+    print("[8/9] Profesyonel rapor hazırlanıyor..."); gen=datetime.now().isoformat(timespec="seconds")
     hp=REPORTS/f"{sym}_report.html"; jp=REPORTS/f"{sym}_report.json"; cp=REPORTS/f"{sym}_universe_snapshot.csv"
-    hp.write_text(html_report(t,p,an,sc,g,xs,ip,cm,gen),encoding="utf-8")
-    jp.write_text(json.dumps(safe({"symbol":sym,"target":t,"profile":p,"metrics":an,"scores":sc,"xu100_count":len(xs),"index_performance":ip,"borsapy_context":bpctx,"comments":cm,"overall":overall(t,p,sc,ip),"generated_at":gen}),ensure_ascii=False,indent=2),encoding="utf-8")
+    hp.write_text(html_report(t,p,an,sc,g,xs,ip,cm,gen,hist),encoding="utf-8")
+    jp.write_text(json.dumps(safe({"symbol":sym,"target":t,"profile":p,"metrics":an,"scores":sc,"xu100_count":len(xs),"index_performance":ip,"historical_analysis":hist,"comments":cm,"overall":overall(t,p,sc,ip,hist),"generated_at":gen}),ensure_ascii=False,indent=2),encoding="utf-8")
     g["all"].to_csv(cp,index=False,encoding="utf-8-sig")
-    print(f"[8/8] Hazır: BIST={len(g['all'])}, sektör={len(g['sector'])}, endüstri={len(g['industry'])}, XU100={len(xs) if xs else 'N/A'}")
+    print(f"[9/9] Hazır: BIST={len(g['all'])}, sektör={len(g['sector'])}, endüstri={len(g['industry'])}, XU100={len(xs) if xs else 'N/A'}")
     print(hp); print(jp); print(cp)
 
 if __name__=="__main__":main()
