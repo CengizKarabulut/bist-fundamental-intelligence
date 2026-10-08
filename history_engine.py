@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import re
+import time
 import unicodedata
 from pathlib import Path
 from typing import Any
@@ -107,6 +108,19 @@ FINANCIAL_DEBT_KEYWORDS = [
     "Uzun Vadeli Borçlanmalar",
     "Diğer Finansal Yükümlülükler",
 ]
+
+
+def _retry_call(fn, attempts=2, base_delay=0.6):
+    last=None
+    for attempt in range(max(1,int(attempts))):
+        try:
+            return fn()
+        except Exception as exc:
+            last=exc
+            if attempt+1 < attempts:
+                time.sleep(base_delay*(attempt+1))
+    if last is not None:
+        raise last
 
 
 def _norm(value: Any) -> str:
@@ -643,7 +657,7 @@ def build_historical_analysis(
         info = {}
         if load_market_info:
             try:
-                info_obj = stock.info
+                info_obj = _retry_call(lambda: stock.info, attempts=2, base_delay=0.5)
                 info = info_obj.todict() if hasattr(info_obj, "todict") else dict(info_obj)
                 result["market_source_available"] = True
             except Exception as exc:
@@ -679,8 +693,18 @@ def build_historical_analysis(
         group_errors=[]
         for candidate in group_candidates:
             try:
-                bs_try=stock.get_balance_sheet(quarterly=True, financial_group=candidate, last_n=qn)
-                inc_try=stock.get_income_stmt(quarterly=True, financial_group=candidate, last_n=qn)
+                bs_try=_retry_call(
+                    lambda candidate=candidate: stock.get_balance_sheet(
+                        quarterly=True, financial_group=candidate, last_n=qn
+                    ),
+                    attempts=2, base_delay=0.7,
+                )
+                inc_try=_retry_call(
+                    lambda candidate=candidate: stock.get_income_stmt(
+                        quarterly=True, financial_group=candidate, last_n=qn
+                    ),
+                    attempts=2, base_delay=0.7,
+                )
                 if bs_try is not None and inc_try is not None and not bs_try.empty and not inc_try.empty:
                     bs_q=bs_try
                     inc_q=inc_try
@@ -703,18 +727,24 @@ def build_historical_analysis(
         bs_a = pd.DataFrame()
         if annual_periods and annual_periods > 0:
             try:
-                inc_a = stock.get_income_stmt(
-                    quarterly=False,
-                    financial_group=group,
-                    last_n=max(4,int(annual_periods)),
+                inc_a = _retry_call(
+                    lambda: stock.get_income_stmt(
+                        quarterly=False,
+                        financial_group=group,
+                        last_n=max(4,int(annual_periods)),
+                    ),
+                    attempts=2, base_delay=0.7,
                 )
             except Exception:
                 inc_a = pd.DataFrame()
             try:
-                bs_a = stock.get_balance_sheet(
-                    quarterly=False,
-                    financial_group=group,
-                    last_n=max(4,int(annual_periods)),
+                bs_a = _retry_call(
+                    lambda: stock.get_balance_sheet(
+                        quarterly=False,
+                        financial_group=group,
+                        last_n=max(4,int(annual_periods)),
+                    ),
+                    attempts=2, base_delay=0.7,
                 )
             except Exception:
                 bs_a = pd.DataFrame()
@@ -724,7 +754,12 @@ def build_historical_analysis(
         # cash-flow statement in BorsaPy. Do not turn that absence into a failure.
         if group=="XI_29" and profile not in financial_profiles:
             try:
-                cf_q = stock.get_cashflow(quarterly=True, financial_group=group, last_n=qn)
+                cf_q = _retry_call(
+                    lambda: stock.get_cashflow(
+                        quarterly=True, financial_group=group, last_n=qn
+                    ),
+                    attempts=2, base_delay=0.7,
+                )
             except Exception:
                 cf_q = pd.DataFrame()
 
