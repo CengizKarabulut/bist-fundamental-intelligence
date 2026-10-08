@@ -155,6 +155,18 @@ Bir analiz artifact'ında veri bulunabildiği ölçüde SEMBOL_report.html, SEMB
 
 v1.0 motoru temsili profil regresyon setini başarıyla geçmiştir. Son tam BIST denetiminde 621 benzersiz şirket ve 100/100 XU100 bileşeni kontrol edilmiş; motor seviyesinde ERROR veya CRITICAL bulgu kalmamıştır. Kalan uyarılar veri sağlayıcı farkı, ekonomik olarak anlamsız negatif çarpanlar, sınırlı tarihçe veya sağlayıcıda bulunmayan finansallar gibi veri-kalite başlıkları olarak ayrı tutulur.
 
+
+## Release Quality Gate
+
+`quality_gate.py`, bir sürümün "hazır" kabul edilmesi için tam BIST audit özetini kontrol eder. Aşağıdaki durumlardan biri oluşursa CI başarısız olur:
+
+- herhangi bir **ERROR**,
+- herhangi bir **CRITICAL**,
+- 600'ün altında benzersiz BIST şirketi,
+- 95'in altında XU100 bileşeni.
+
+WARNING ve INFO seviyeleri veri sağlayıcı farkı, sınırlı tarihçe veya ekonomik olarak anlamsız çarpanlar gibi araştırma notlarıdır; sessizce yok edilmez ancak motor arızası olarak değerlendirilmez. Son tam doğrulamada **621 şirket / XU100 100/100 / ERROR 0 / CRITICAL 0** elde edilmiştir.
+
 ## Uyarı
 
 Bu proje araştırma ve veri analizi amaçlıdır. Üretilen raporlar yatırım tavsiyesi değildir.
