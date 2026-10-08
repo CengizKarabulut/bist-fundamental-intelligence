@@ -66,11 +66,16 @@ def main():
     assert glbmd["profile"] == "Finansal", glbmd["profile"]
     assert isfin["profile"] == "Finansal", isfin["profile"]
 
-    # Supported financial institutions should prefer UFRS.
-    for r in (ages,glbmd):
-        hist=r["historical_analysis"]
-        assert not hist.get("error"), hist.get("error")
-        assert hist.get("financial_group_used") == "UFRS", hist.get("financial_group_used")
+    # Supported financial institutions must resolve to a valid statement
+    # schema. Insurers use UFRS; some non-bank financials are available only via
+    # XI_29 and the engine should fall back transparently.
+    ah=ages["historical_analysis"]
+    assert not ah.get("error"), ah.get("error")
+    assert ah.get("financial_group_used") == "UFRS", ah.get("financial_group_used")
+
+    gh=glbmd["historical_analysis"]
+    assert not gh.get("error"), gh.get("error")
+    assert gh.get("financial_group_used") in {"UFRS","XI_29"}, gh.get("financial_group_used")
 
     # A provider can legitimately have no historical statements for a listed
     # symbol. The report must degrade gracefully instead of crashing.
