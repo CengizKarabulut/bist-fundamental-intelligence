@@ -1,0 +1,44 @@
+name: Hisse Analizi
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: "BIST hisse kodu (örn. ASELS)"
+        required: true
+        default: "ASELS"
+        type: string
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Repository'yi al
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Bağımlılıkları kur
+        run: pip install -r requirements.txt
+
+      - name: Hisse raporunu oluştur
+        env:
+          SYMBOL: ${{ inputs.symbol }}
+        run: python analyze.py "$SYMBOL"
+
+      - name: Raporu artifact olarak yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: bist-report-${{ inputs.symbol }}
+          path: |
+            reports/*.html
+            reports/*.json
+          if-no-files-found: error
+          retention-days: 14
