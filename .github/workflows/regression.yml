@@ -7,6 +7,8 @@ on:
     paths:
       - "analyze.py"
       - "history_engine.py"
+      - "special_profiles.py"
+      - "data/nav_inputs.csv"
       - "regression_checks.py"
       - "requirements.txt"
       - ".github/workflows/regression.yml"
@@ -35,7 +37,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Python sözdizimi kontrolü
-        run: python -m py_compile analyze.py history_engine.py
+        run: python -m py_compile analyze.py history_engine.py special_profiles.py regression_checks.py
 
       - name: ASELS sanayi/savunma testi
         run: python analyze.py ASELS
@@ -48,6 +50,9 @@ jobs:
 
       - name: EKGYO GYO/NAD testi
         run: python analyze.py EKGYO
+
+      - name: KCHOL holding/NAD-gate testi
+        run: python analyze.py KCHOL
 
       - name: AGESA sigorta/UFRS testi
         run: python analyze.py AGESA
