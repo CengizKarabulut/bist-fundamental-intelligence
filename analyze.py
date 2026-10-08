@@ -66,6 +66,10 @@ OVR={
 }
 BANK_SKIP={"ev","pfcf","roic","gross","opm","ebitdam","rev_g","curr","quick","de","nde","fcfm"}
 INS_SKIP={"ev","pfcf","curr","quick","de","nde","fcfm"}
+# GYO'larda klasik sanayi değerleme/nakit kalite oranları raporda gösterilebilir
+# ancak NAD/PD-NAD yerine ana skora sokulmaz. Proje geliştirme kaynaklı işletme
+# sermayesi hareketleri FCF ve Net Borç/FAVÖK'ü de aşırı oynatabilir.
+GYO_NONSCORE={"pe","pb","ev","pfcf","eps_g","nde","fcfm","pio"}
 
 
 def fnum(v):
@@ -93,6 +97,13 @@ def profile(r):
 
 def applicable(k,p):
     return not (p=="Banka" and k in BANK_SKIP) and not (p=="Sigorta" and k in INS_SKIP)
+
+def scoreable(k,p):
+    if not applicable(k,p):
+        return False
+    if p=="GYO" and k in GYO_NONSCORE:
+        return False
+    return True
 
 def band(k,p): return OVR.get(p,{}).get(k) or BANDS.get(k)
 
