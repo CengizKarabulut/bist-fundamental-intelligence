@@ -342,11 +342,15 @@ def factor_comment(x,p):
 
     if not x.get("scoreable",True):
         s=(
-            f"{x['label']} {fmt(x['v'],x['kind'])} ({source}). Bu oran GYO profilinde "
+            f"{x['label']} {fmt(x['v'],x['kind'])} ({source}). Bu oran {p} profilinde "
             "karşılaştırmalı bilgi olarak gösterilir ancak ana skora dahil edilmez."
         )
         if p=="GYO" and x["cat"]=="Değerleme":
             s+=" GYO değerlemesinde gerçek NAD/PD-NAD, portföy ekspertiz değerleri ve proje yapısı daha belirleyicidir."
+        elif p=="Holding" and x["cat"]=="Değerleme":
+            s+=" Holding değerlemesinde iştirak bazlı NAD ve holding-seviye net nakit/borç ana referanstır."
+        elif p=="Yatırım Ortaklığı" and x["cat"]=="Değerleme":
+            s+=" Yatırım ortaklığında portföy/NAV iskontosu veya primi ana değerleme referansıdır."
         if pr["median"] is not None and pr["n"]>=3 and pr["pct"] is not None:
             s+=f" TradingView {name} medyanı {fmt(pr['median'],x['kind'])}; göreli konum {pr['pct']:.0f}/100."
         return s
