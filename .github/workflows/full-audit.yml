@@ -7,9 +7,12 @@ on:
     paths:
       - "full_audit.py"
       - "merge_audit.py"
-      - "analyze.py"
-      - "history_engine.py"
+      - "audit-trigger.txt"
       - ".github/workflows/full-audit.yml"
+
+concurrency:
+  group: full-bist-deep-audit
+  cancel-in-progress: true
 
 jobs:
   audit:
