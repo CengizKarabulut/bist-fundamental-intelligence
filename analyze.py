@@ -64,12 +64,12 @@ BANDS={
 OVR={
     "Banka":{"pe":("low",5,12),"pb":("low",0.7,2),"roe":("high",12,25),"roa":("high",1,3),"eq_assets":("high",0.06,0.14),"eps_g":("high",0,30),"ni_g":("high",0,30)},
     "Sigorta":{"pe":("low",6,16),"pb":("low",1,3.5),"roe":("high",12,30),"roa":("high",1.5,5)},
-    "Finansal":{"pe":("low",6,18),"pb":("low",0.8,3.5),"roe":("high",10,25),"roa":("high",1.5,6),"eps_g":("high",0,30),"ni_g":("high",0,30)},
+    "Finansal":{"pe":("low",6,18),"pb":("low",0.8,3.5),"roe":("high",10,25),"roa":("high",1.5,6),"eq_assets":("high",0.08,0.20),"eps_g":("high",0,30),"ni_g":("high",0,30)},
     "Savunma/Teknoloji":{"pe":("low",18,55),"pb":("low",2,8),"ev":("low",10,30),"roe":("high",10,25),"roa":("high",4,12),"rev_g":("high",5,40),"eps_g":("high",5,50)},
 }
 FINANCIAL_SKIP={"ev","pfcf","roic","gross","opm","netm","ebitdam","rev_g","curr","quick","de","nde","fcfm","pio"}
 BANK_SKIP=set(FINANCIAL_SKIP)
-INS_SKIP=set(FINANCIAL_SKIP)
+INS_SKIP=set(FINANCIAL_SKIP) | {"eq_assets"}
 OTHER_FIN_SKIP=set(FINANCIAL_SKIP)
 YORT_SKIP=set(FINANCIAL_SKIP)
 # GYO'larda klasik sanayi değerleme/nakit kalite oranları raporda gösterilebilir
@@ -169,9 +169,11 @@ def applicable(k,p):
 
 def scoreable(k,p):
     if not applicable(k,p):return False
+    # Holding / yatırım ortaklığı şirketlerinde konsolide oranlardan "kalite"
+    # veya "ucuzluk" skoru üretmek yerine iştirak/portföy NAD katmanı beklenir.
+    if p in {"Holding","Yatırım Ortaklığı"}:
+        return False
     if p=="GYO" and k in GYO_NONSCORE:return False
-    if p=="Holding" and k in HOLDING_NONSCORE:return False
-    if p=="Yatırım Ortaklığı" and k in YORT_NONSCORE:return False
     return True
 
 def economically_valid(k,v):
@@ -449,16 +451,44 @@ def apply_profile_primary_source(a,p,history,g):
 
     return a
 
-def scores(a):
+def _quality_weights(profile):
+    """Category weights by business model.
+
+    Missing categories are automatically re-normalized by wavg(). These are
+    research-model weights, not regulatory capital or credit ratings.
+    """
+    if profile=="Banka":
+        return {"Büyüme":0.30,"Kârlılık":0.50,"Finansal Sağlık":0.20,"Nakit Kalitesi":0.0}
+    if profile=="Sigorta":
+        # Solvency cannot be inferred from equity/assets alone; technical
+        # metrics remain in the special-profile section rather than a fake
+        # generic balance-sheet score.
+        return {"Büyüme":0.40,"Kârlılık":0.60,"Finansal Sağlık":0.0,"Nakit Kalitesi":0.0}
+    if profile=="Finansal":
+        return {"Büyüme":0.35,"Kârlılık":0.45,"Finansal Sağlık":0.20,"Nakit Kalitesi":0.0}
+    if profile=="GYO":
+        return {"Büyüme":0.25,"Kârlılık":0.30,"Finansal Sağlık":0.45,"Nakit Kalitesi":0.0}
+    return {"Büyüme":0.25,"Kârlılık":0.30,"Finansal Sağlık":0.25,"Nakit Kalitesi":0.20}
+
+
+def scores(a, profile="Genel"):
     cats={
         c:wavg([(x["abs"],x["w"]) for x in a.values() if x["cat"]==c and x.get("scoreable",x["app"])])
         for c in CATS
     }
-    quality=wavg([
-        (cats["Büyüme"],.25),(cats["Kârlılık"],.30),
-        (cats["Finansal Sağlık"],.25),(cats["Nakit Kalitesi"],.20)
-    ])
+    qw=_quality_weights(profile)
+    quality=wavg([(cats[name],weight) for name,weight in qw.items()])
     val=cats["Değerleme"]
+
+    # Holding ve yatırım ortaklığında generic oranlardan skor üretmiyoruz.
+    if profile in {"Holding","Yatırım Ortaklığı"}:
+        quality=None
+        val=None
+
+    # GYO'da operasyonel kalite ayrı gösterilir; gerçek bileşik değerleme skoru
+    # NAD/PD-NAD olmadan tamamlanmış kabul edilmez.
+    composite=None if profile in {"GYO","Holding","Yatırım Ortaklığı"} else wavg([(quality,.70),(val,.30)])
+
     rel={}
     for gn in ["industry","sector","xu100","bist"]:
         rc={
@@ -469,17 +499,21 @@ def scores(a):
             ])
             for c in CATS
         }
-        rq=wavg([
-            (rc["Büyüme"],.25),(rc["Kârlılık"],.30),
-            (rc["Finansal Sağlık"],.25),(rc["Nakit Kalitesi"],.20)
-        ])
+        rq=wavg([(rc[name],weight) for name,weight in qw.items()])
+        if profile in {"Holding","Yatırım Ortaklığı"}:
+            rq=None
+            rval=None
+            roverall=None
+        else:
+            rval=rc["Değerleme"]
+            roverall=rq if profile=="GYO" else wavg([(rq,.70),(rval,.30)])
         rel[gn]={
-            "cats":rc,"quality":rq,"valuation":rc["Değerleme"],
-            "overall":wavg([(rq,.7),(rc["Değerleme"],.3)])
+            "cats":rc,"quality":rq,"valuation":rval,
+            "overall":roverall
         }
     return {
         "cats":cats,"quality":quality,"valuation":val,
-        "composite":wavg([(quality,.7),(val,.3)]),"rel":rel
+        "composite":composite,"rel":rel
     }
 
 def ref_text(k,p):
@@ -1324,7 +1358,7 @@ def main():
     t=h.iloc[0].copy(); t["symbol"]=sym; p=profile(t)
     print("[2/11] BIST100 üyeleri alınıyor..."); xs=xu100(u)
     print("[3/11] BorsaPy/KAP ve 12 çeyreklik mali tablolar analiz ediliyor..."); REPORTS.mkdir(exist_ok=True); hist=build_historical_analysis(sym,p,REPORTS)
-    print("[4/11] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs); an=analyze(t,p,g); an=apply_profile_primary_source(an,p,hist,g); sc=scores(an)
+    print("[4/11] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs); an=analyze(t,p,g); an=apply_profile_primary_source(an,p,hist,g); sc=scores(an,p)
     print("[5/11] Her faktör yorumlanıyor..."); cm={k:factor_comment(v,p) for k,v in an.items()}
     print("[6/11] XU100 ve sektör endeksi performansı..."); ip=index_perf(); secidx=sector_index_code(t,p); sip=bist_index_perf(secidx)
     print("[7/11] Tarihsel büyüme, marj, nakit ve bilanço trendleri birleştiriliyor...")
