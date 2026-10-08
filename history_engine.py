@@ -924,7 +924,10 @@ def build_historical_analysis(
         result["quarterly"] = rows
 
         if profile=="Banka":
-            core_keys=["net_income","total_assets","equity","loans","deposits"]
+            # Net income, assets and equity are universal bank anchors. Loans and
+            # deposits/funds are operating-detail rows whose naming differs for
+            # participation/development banks and therefore are tracked separately.
+            core_keys=["net_income","total_assets","equity"]
         elif profile in {"Sigorta","Finansal"}:
             # Revenue/cash-flow definitions are not comparable with industrial
             # companies. Require profit + balance-sheet anchors instead.
@@ -937,6 +940,11 @@ def build_historical_analysis(
         result["data_quality"] = {
             "core_rows_found": found_core,
             "core_rows_expected": len(core_keys),
+            "bank_operating_rows_found": (
+                sum(1 for k in ["loans","deposits"] if k in found)
+                if profile=="Banka" else None
+            ),
+            "bank_operating_rows_expected": 2 if profile=="Banka" else None,
             "cashflow_rows_found": found_cash if group=="XI_29" and profile not in financial_profiles else None,
             "quarterly_periods": len(latest_periods),
             "annual_periods": max(len(annual_rev), len(annual_ni)),
