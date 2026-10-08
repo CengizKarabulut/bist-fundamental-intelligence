@@ -2,7 +2,7 @@
 
 ## 1.0.0 — 2026-10-09
 
-İlk tam BIST sürüm adayı.
+İlk tam BIST kararlı sürümü.
 
 ### Analiz motoru
 - Güncel BIST şirket evreni dinamik olarak alınır ve şirket bazında tekilleştirilir.
