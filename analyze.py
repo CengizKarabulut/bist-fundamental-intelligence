@@ -7,6 +7,7 @@ from typing import Any
 
 import pandas as pd
 import yfinance as yf
+import borsapy as bp
 from tradingview_screener import Query, col
 
 ROOT = Path(__file__).resolve().parent
@@ -113,13 +114,27 @@ def universe():
     df=df.copy(); df["symbol"]=df["ticker"].map(symbol); return df
 
 def xu100(u):
+    # BorsaPy provides BIST index components directly. This is preferred over
+    # inferring membership from screener fields because it should return the
+    # complete current constituent list.
+    try:
+        x={str(s).upper() for s in bp.Index("XU100").component_symbols}
+        if len(x)>=90:
+            return x
+    except Exception:
+        pass
+
+    # Fallback: TradingView Screener index membership.
     try:
         _,d=Query().select("name","exchange").set_index("SYML:BIST;XU100").limit(200).get_scanner_data()
         x={symbol(t) for t in d["ticker"].tolist()} if d is not None and not d.empty else set()
         if len(x)>=80:return x
-    except: pass
+    except Exception:
+        pass
+
     if "index" in u:
-        m=u["index"].astype(str).str.contains(r"XU100|BIST 100",case=False,na=False,regex=True); x=set(u.loc[m,"symbol"])
+        m=u["index"].astype(str).str.contains(r"XU100|BIST 100",case=False,na=False,regex=True)
+        x=set(u.loc[m,"symbol"])
         if x:return x
     return set()
 
@@ -189,6 +204,17 @@ def factor_comment(x,p):
     return s
 
 def index_perf():
+    # Prefer BorsaPy/TradingView index history for BIST100.
+    try:
+        d=bp.Index("XU100").history(period="2y")
+        if d is not None and not d.empty:
+            c=pd.to_numeric(d["Close"],errors="coerce").dropna().astype(float)
+            def p(n):return (float(c.iloc[-1])/float(c.iloc[-n-1])-1)*100 if len(c)>n else None
+            return {"3m":p(63),"6m":p(126),"12m":p(252)}
+    except Exception:
+        pass
+
+    # Fallback to Yahoo Finance.
     for s in ["XU100.IS","^XU100"]:
         try:
             d=yf.download(s,period="2y",interval="1d",auto_adjust=False,progress=False,threads=False)
@@ -196,7 +222,8 @@ def index_perf():
                 c=d["Close"]; c=c.iloc[:,0] if isinstance(c,pd.DataFrame) else c; c=c.dropna().astype(float)
                 def p(n):return (float(c.iloc[-1])/float(c.iloc[-n-1])-1)*100 if len(c)>n else None
                 return {"3m":p(63),"6m":p(126),"12m":p(252)}
-        except: pass
+        except Exception:
+            pass
     return {"3m":None,"6m":None,"12m":None}
 
 def overall(t,p,s,perf):
@@ -248,6 +275,59 @@ def html_report(t,p,a,s,g,xset,perf,comments,gen):
     sec=str(t.get('sector') or 'N/A'); ind=str(t.get('industry') or 'N/A'); name=str(t.get('description') or t.get('name') or t['symbol'])
     return f'''<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(t['symbol'])} — BIST Fundamental Intelligence</title><style>body{{font-family:Arial;background:#0d1117;color:#e6edf3;margin:0;line-height:1.5}}main{{max-width:1500px;margin:auto;padding:28px}}small{{display:block;color:#8b949e}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}.card,section,.note{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px}}.card b{{display:block;font-size:26px}}.table{{overflow:auto;margin:18px 0}}table{{width:100%;min-width:1100px;border-collapse:collapse;background:#161b22}}th,td{{padding:9px;border:1px solid #30363d;text-align:right;vertical-align:top}}th:first-child,td:first-child{{text-align:left}}th{{background:#21262d}}section{{margin:10px 0}}section h3{{margin:0 0 6px;font-size:16px}}section p{{margin:0}}.note{{border-left:4px solid #d29922}}.expert{{border-left-color:#3fb950}}</style></head><body><main><h1>{e(t['symbol'])} — Fundamental Intelligence Report</h1><p>{e(name)} · Profil: {e(p)} · Sektör: {e(sec)} · Endüstri: {e(ind)} · {e(gen)}</p><div class="grid">{''.join(cards)}</div><h2>Profesyonel Genel Değerlendirme</h2><div class="note expert">{e(overall(t,p,s,perf))}</div><h2>Kategori Özeti</h2><div class="table"><table><tr><th>Kategori</th><th>Mutlak</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(cr)}</table></div><h2>Tüm Finansal Faktörler</h2><div class="note">Karşılaştırma sabit emsal sayısıyla değil, güncel tam BIST evreninden otomatik sektör/endüstri, BIST100 ve tüm BIST dağılımlarıyla yapılır. 100 puan göreli olarak daha avantajlı konumu gösterir.</div><div class="table"><table><tr><th>Metrik</th><th>{e(t['symbol'])}</th><th>Mutlak</th><th>Endüstri</th><th>Sektör</th><th>BIST100</th><th>Tüm BIST</th></tr>{''.join(rows)}</table></div><h2>Faktör Bazlı Uzman Yorumları</h2>{''.join(blocks)}<h2>BIST100 Fiyat Relatif Performansı</h2><div class="table"><table><tr><th>Dönem</th><th>{e(t['symbol'])}</th><th>XU100</th><th>Alfa</th></tr>{''.join(pr)}</table></div><h2>Kapsam</h2><div class="grid"><div class="card"><small>Tüm BIST</small><b>{len(g['all'])}</b></div><div class="card"><small>Sektör</small><b>{len(g['sector'])}</b><span>{e(sec)}</span></div><div class="card"><small>Endüstri</small><b>{len(g['industry'])}</b><span>{e(ind)}</span></div><div class="card"><small>BIST100 üyeleri</small><b>{len(xset) if xset else 'N/A'}</b></div></div><p class="note">Eksik veri uydurulmaz. Mutlak referans bantları evrensel kesinlik değil, finansal oran mantığı + profil kalibrasyonudur. GYO/Holding için PD/DD gerçek NAD iskontosu değildir. Araştırma amaçlıdır; yatırım tavsiyesi değildir.</p></main></body></html>'''
 
+def borsapy_target_context(sym,p):
+    """BIST-specific deep context for the selected stock.
+
+    Uses BorsaPy for KAP metadata, exact market metrics, and financial statement
+    availability. Heavy statement retrieval is only done for the selected stock,
+    never for the whole BIST universe.
+    """
+    out={"source":"borsapy","kap":{},"market":{},"financials":{}}
+    try:
+        stock=bp.Ticker(sym)
+        info=stock.info.todict() if hasattr(stock.info,"todict") else dict(stock.info)
+        out["kap"]={
+            "sector":info.get("sector"),
+            "industry":info.get("industry"),
+            "website":info.get("website"),
+            "business_summary":info.get("longBusinessSummary"),
+        }
+        out["market"]={
+            "market_cap":info.get("marketCap"),
+            "pe":info.get("trailingPE"),
+            "pb":info.get("priceToBook"),
+            "ev_ebitda":info.get("enterpriseToEbitda"),
+            "net_debt":info.get("netDebt"),
+            "foreign_ratio":info.get("foreignRatio"),
+            "dividend_yield":info.get("dividendYield"),
+        }
+
+        group="UFRS" if p=="Banka" else "XI_29"
+        try:
+            bs=stock.get_balance_sheet(quarterly=True,financial_group=group,last_n=8)
+            out["financials"]["balance_sheet_periods"]=list(bs.columns)
+            out["financials"]["balance_sheet_rows"]=int(len(bs))
+        except Exception as exc:
+            out["financials"]["balance_sheet_error"]=str(exc)
+
+        try:
+            inc=stock.get_income_stmt(quarterly=True,financial_group=group,last_n=8)
+            out["financials"]["income_stmt_periods"]=list(inc.columns)
+            out["financials"]["income_stmt_rows"]=int(len(inc))
+        except Exception as exc:
+            out["financials"]["income_stmt_error"]=str(exc)
+
+        if p!="Banka":
+            try:
+                cf=stock.get_cashflow(quarterly=True,financial_group=group,last_n=8)
+                out["financials"]["cashflow_periods"]=list(cf.columns)
+                out["financials"]["cashflow_rows"]=int(len(cf))
+            except Exception as exc:
+                out["financials"]["cashflow_error"]=str(exc)
+    except Exception as exc:
+        out["error"]=str(exc)
+    return out
+
 def safe(v):
     if isinstance(v,dict):return {str(k):safe(x) for k,x in v.items()}
     if isinstance(v,list):return [safe(x) for x in v]
@@ -258,19 +338,20 @@ def safe(v):
 
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("symbol"); a=ap.parse_args(); sym=a.symbol.upper().replace("BIST:","").replace(".IS","").strip()
-    print("[1/7] Tüm BIST evreni alınıyor..."); u=universe(); h=u[u.symbol==sym]
+    print("[1/8] Tüm BIST evreni alınıyor..."); u=universe(); h=u[u.symbol==sym]
     if h.empty:raise SystemExit(f"{sym} bulunamadı")
     t=h.iloc[0].copy(); t["symbol"]=sym; p=profile(t)
-    print("[2/7] BIST100 üyeleri alınıyor..."); xs=xu100(u)
-    print("[3/7] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs); an=analyze(t,p,g); sc=scores(an)
-    print("[4/7] Her faktör yorumlanıyor..."); cm={k:factor_comment(v,p) for k,v in an.items()}
-    print("[5/7] XU100 performansı..."); ip=index_perf()
-    print("[6/7] Rapor hazırlanıyor..."); gen=datetime.now().isoformat(timespec="seconds"); REPORTS.mkdir(exist_ok=True)
+    print("[2/8] BIST100 üyeleri alınıyor..."); xs=xu100(u)
+    print("[3/8] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs); an=analyze(t,p,g); sc=scores(an)
+    print("[4/8] Her faktör yorumlanıyor..."); cm={k:factor_comment(v,p) for k,v in an.items()}
+    print("[5/8] XU100 performansı..."); ip=index_perf()
+    print("[6/8] BorsaPy/KAP ve hedef şirket mali tabloları doğrulanıyor..."); bpctx=borsapy_target_context(sym,p)
+    print("[7/8] Rapor hazırlanıyor..."); gen=datetime.now().isoformat(timespec="seconds"); REPORTS.mkdir(exist_ok=True)
     hp=REPORTS/f"{sym}_report.html"; jp=REPORTS/f"{sym}_report.json"; cp=REPORTS/f"{sym}_universe_snapshot.csv"
     hp.write_text(html_report(t,p,an,sc,g,xs,ip,cm,gen),encoding="utf-8")
-    jp.write_text(json.dumps(safe({"symbol":sym,"target":t,"profile":p,"metrics":an,"scores":sc,"xu100_count":len(xs),"index_performance":ip,"comments":cm,"overall":overall(t,p,sc,ip),"generated_at":gen}),ensure_ascii=False,indent=2),encoding="utf-8")
+    jp.write_text(json.dumps(safe({"symbol":sym,"target":t,"profile":p,"metrics":an,"scores":sc,"xu100_count":len(xs),"index_performance":ip,"borsapy_context":bpctx,"comments":cm,"overall":overall(t,p,sc,ip),"generated_at":gen}),ensure_ascii=False,indent=2),encoding="utf-8")
     g["all"].to_csv(cp,index=False,encoding="utf-8-sig")
-    print(f"[7/7] Hazır: BIST={len(g['all'])}, sektör={len(g['sector'])}, endüstri={len(g['industry'])}, XU100={len(xs) if xs else 'N/A'}")
+    print(f"[8/8] Hazır: BIST={len(g['all'])}, sektör={len(g['sector'])}, endüstri={len(g['industry'])}, XU100={len(xs) if xs else 'N/A'}")
     print(hp); print(jp); print(cp)
 
 if __name__=="__main__":main()
