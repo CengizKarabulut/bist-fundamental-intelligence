@@ -817,6 +817,23 @@ def overall(t,p,s,perf,history=None,validation=None,sector_code=None,sector_perf
                 )
             if eqa is not None:
                 words.append(f"Özkaynak/aktif oranı {eqa:.1f}% seviyesinde.")
+        elif p in {"Sigorta","Finansal"}:
+            ey=hs.get("equity_yoy")
+            ay=hs.get("assets_yoy")
+            eqa=hs.get("equity_to_assets")
+            if ni is not None:
+                words.append(
+                    f"{period or 'Son rapor dönemi'} net kârı yıllık {fmt(ni,'%')} değişti."
+                )
+            if ey is not None or ay is not None:
+                words.append(
+                    f"Bilanço tarafında özkaynak büyümesi {fmt(ey,'%')}, aktif büyümesi {fmt(ay,'%')}."
+                )
+            if eqa is not None:
+                words.append(f"Özkaynak/aktif oranı {eqa:.1f}% seviyesinde.")
+            words.append(
+                f"{p} profilinde sanayi tipi FAVÖK, FCF ve net borç/FAVÖK metrikleri ana karar setine alınmadı."
+            )
         else:
             if rev is not None or ni is not None:
                 words.append(
