@@ -629,6 +629,11 @@ def source_validation(t,metrics,history):
     checks=[]
     critical=0
     warning=0
+    profile_name=history.get("profile")
+
+    def metric_relevant(key):
+        x=metrics.get(key,{})
+        return bool(x.get("app",True) and x.get("scoreable",True))
 
     def classify_pair(tv,iy,kind,warning_rel,critical_rel,warning_abs=None,critical_abs=None,basis_sensitive=False):
         nonlocal critical,warning
@@ -672,6 +677,13 @@ def source_validation(t,metrics,history):
 
     for label,key,hval,kind,wrel,crel,wabs,cabs,basis_sensitive in specs:
         tv=metrics.get(key,{}).get("raw_v",metrics.get(key,{}).get("v"))
+        if not metric_relevant(key):
+            diff=(tv-hval) if tv is not None and hval is not None else None
+            checks.append({
+                "label":label,"tradingview":tv,"borsapy":hval,"difference":diff,
+                "status":"PROFİLDE SKOR DIŞI","kind":kind
+            })
+            continue
         if tv is None or hval is None:
             checks.append({"label":label,"tradingview":tv,"borsapy":hval,"difference":None,"status":"N/A","kind":kind})
             continue
@@ -688,20 +700,21 @@ def source_validation(t,metrics,history):
         tv=metrics.get(key,{}).get("raw_v",metrics.get(key,{}).get("v"))
         iy=fnum(market.get(mkey))
 
+        if not metric_relevant(key):
+            diff=(tv-iy) if tv is not None and iy is not None else None
+            status_note="PROFİLDE SKOR DIŞI"
+            if profile_name=="GYO" and history.get("market_source_available",False) and iy is None and key in {"pe","ev"}:
+                status_note="İŞ YATIRIM A/D - GYO'DA SKOR DIŞI"
+            checks.append({
+                "label":label,"tradingview":tv,"borsapy":iy,"difference":diff,
+                "status":status_note,"kind":kind
+            })
+            continue
+
         if tv is not None and iy is None:
-            is_gyo_ad=(
-                history.get("profile")=="GYO"
-                and history.get("market_source_available",False)
-                and key in {"pe","ev"}
-            )
-            if is_gyo_ad:
-                st="İŞ YATIRIM A/D - YÖNETİLDİ"
-                warning+=1
-            else:
-                st="N/A"
             checks.append({
                 "label":label,"tradingview":tv,"borsapy":None,"difference":None,
-                "status":st,"kind":kind
+                "status":"N/A","kind":kind
             })
         elif tv is None or iy is None:
             checks.append({"label":label,"tradingview":tv,"borsapy":iy,"difference":None,"status":"N/A","kind":kind})
@@ -730,13 +743,16 @@ def source_validation(t,metrics,history):
     stmt_nd=fnum(h.get("net_debt_statement"))
     iy_nd=fnum(market.get("net_debt"))
     if stmt_nd is not None and iy_nd is not None and iy_nd!=0:
-        rel=abs(stmt_nd-iy_nd)/abs(iy_nd)
-        if rel>0.25:
-            st="BÜYÜK FARK"; critical+=1
-        elif rel>0.10:
-            st="İZLE"; warning+=1
+        if profile_name in {"Banka","Sigorta","Finansal","Holding","Yatırım Ortaklığı"}:
+            st="PROFİLDE TANIM FARKI - BİLGİ"
         else:
-            st="UYUMLU"
+            rel=abs(stmt_nd-iy_nd)/abs(iy_nd)
+            if rel>0.25:
+                st="BÜYÜK FARK"; critical+=1
+            elif rel>0.10:
+                st="İZLE"; warning+=1
+            else:
+                st="UYUMLU"
         checks.append({
             "label":"Net Borç","tradingview":stmt_nd/1e9,"borsapy":iy_nd/1e9,
             "difference":(stmt_nd-iy_nd)/1e9,"status":st,"kind":"B TL"
