@@ -1,0 +1,90 @@
+name: Full BIST Deep Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "full_audit.py"
+      - "merge_audit.py"
+      - "analyze.py"
+      - "history_engine.py"
+      - ".github/workflows/full-audit.yml"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [0,1,2,3,4,5,6,7,8,9,10,11]
+    permissions:
+      contents: read
+    steps:
+      - name: Repository'yi al
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Bağımlılıkları kur
+        run: pip install -r requirements.txt
+
+      - name: Sözdizimi kontrolü
+        run: python -m py_compile analyze.py history_engine.py full_audit.py merge_audit.py
+
+      - name: BIST shard taraması
+        run: python full_audit.py --shard ${{ matrix.shard }} --shards 12
+
+      - name: Shard çıktısını yükle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-shard-${{ matrix.shard }}
+          path: |
+            audit/audit_shard_*.csv
+            audit/audit_shard_*.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  aggregate:
+    needs: audit
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Repository'yi al
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Bağımlılıkları kur
+        run: pip install -r requirements.txt
+
+      - name: Shard artifactlarını indir
+        uses: actions/download-artifact@v4
+        with:
+          pattern: audit-shard-*
+          path: audit_parts
+          merge-multiple: true
+
+      - name: Audit sonuçlarını birleştir
+        run: python merge_audit.py audit_parts audit_summary
+
+      - name: Tam BIST audit raporunu yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-bist-audit-${{ github.run_id }}
+          path: audit_summary/*
+          if-no-files-found: error
+          retention-days: 30
