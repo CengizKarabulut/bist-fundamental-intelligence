@@ -1,0 +1,49 @@
+name: Regression Smoke Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "analyze.py"
+      - "history_engine.py"
+      - "requirements.txt"
+      - ".github/workflows/regression.yml"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Repository'yi al
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Bağımlılıkları kur
+        run: pip install -r requirements.txt
+
+      - name: Python sözdizimi kontrolü
+        run: python -m py_compile analyze.py history_engine.py
+
+      - name: ASELS sanayi/savunma testi
+        run: python analyze.py ASELS
+
+      - name: AKBNK banka/UFRS testi
+        run: python analyze.py AKBNK
+
+      - name: Regresyon raporlarını yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-reports
+          path: |
+            reports/*.html
+            reports/*.json
+            reports/*.csv
+          if-no-files-found: error
+          retention-days: 7
