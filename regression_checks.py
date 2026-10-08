@@ -173,7 +173,13 @@ def main():
         h["net_debt_statement"], h["net_debt_provider"]
     )
 
-    # GYO benchmark should be the BIST GYO index.
+    # Special profiles must use official BIST comparison universes instead
+    # of the generic provider "Finance" sector.
+    assert ekg["benchmark_context"]["sector_benchmark_code"] == "XGMYO", ekg["benchmark_context"]
+    assert akb["benchmark_context"]["sector_benchmark_code"] == "XBANK", akb["benchmark_context"]
+    assert ages["benchmark_context"]["sector_benchmark_code"] == "XSGRT", ages["benchmark_context"]
+
+    # GYO price benchmark should also be the BIST GYO index.
     assert ekg["sector_index"]["code"] == "XGMYO", ekg["sector_index"]["code"]
 
     # Cross-source ciro-growth conflict must be visible, not silently averaged away.
