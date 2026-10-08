@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import signal
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -34,6 +35,26 @@ def finite(v):
         return v is not None and math.isfinite(float(v))
     except Exception:
         return False
+
+class SymbolAuditTimeout(TimeoutError):
+    pass
+
+def _timeout_handler(signum, frame):
+    raise SymbolAuditTimeout("symbol audit timeout")
+
+def audit_symbol_with_timeout(row, universe_df, xu100_set, qn, seconds):
+    """Bound one symbol audit so a provider hang cannot block an entire shard."""
+    if seconds <= 0 or not hasattr(signal, "SIGALRM"):
+        return audit_symbol(row, universe_df, xu100_set, qn)
+
+    previous = signal.getsignal(signal.SIGALRM)
+    signal.signal(signal.SIGALRM, _timeout_handler)
+    signal.alarm(int(seconds))
+    try:
+        return audit_symbol(row, universe_df, xu100_set, qn)
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
 
 def audit_symbol(row, universe_df, xu100_set, qn):
     sym=str(row["symbol"]).upper()
@@ -246,6 +267,8 @@ def main():
     ap.add_argument("--shard-count",type=int,default=1)
     ap.add_argument("--quarterly",type=int,default=8)
     ap.add_argument("--limit",type=int,default=0)
+    ap.add_argument("--symbol-timeout",type=int,default=45,
+                    help="Bir hissenin audit'i için azami saniye (Linux CI'da SIGALRM).")
     args=ap.parse_args()
 
     OUT.mkdir(exist_ok=True)
@@ -264,7 +287,16 @@ def main():
         sym=str(row["symbol"]).upper()
         print(f"[audit {args.shard_index}/{args.shard_count}] {pos}/{len(selected)} {sym}",flush=True)
         try:
-            results.append(audit_symbol(row,u,xs,args.quarterly))
+            results.append(audit_symbol_with_timeout(
+                row,u,xs,args.quarterly,args.symbol_timeout
+            ))
+        except SymbolAuditTimeout as exc:
+            results.append({
+                "symbol":sym,"profile":eng.profile(row),"status":"CRITICAL",
+                "issue_count":1,"critical_count":1,"warning_count":0,
+                "issues":[{"severity":"CRITICAL","code":"AUDIT_TIMEOUT",
+                           "detail":f"{args.symbol_timeout}s içinde tamamlanamadı"}],
+            })
         except Exception as exc:
             results.append({
                 "symbol":sym,"profile":eng.profile(row),"status":"ERROR",
