@@ -899,6 +899,21 @@ def overall(t,p,s,perf,history=None,validation=None,sector_code=None,sector_perf
             words.append(
                 f"{p} profilinde sanayi tipi FAVÖK, FCF ve net borç/FAVÖK metrikleri ana karar setine alınmadı."
             )
+        elif p in {"Holding","Yatırım Ortaklığı"}:
+            ey=hs.get("equity_yoy")
+            ay=hs.get("assets_yoy")
+            if ni is not None:
+                words.append(
+                    f"{period or 'Son rapor dönemi'} konsolide net kârı yıllık {fmt(ni,'%')} değişti; "
+                    "iştirak/portföy etkileri nedeniyle bu değişim operasyonel şirket kârı gibi skorlanmadı."
+                )
+            if ey is not None or ay is not None:
+                words.append(
+                    f"Özkaynak büyümesi {fmt(ey,'%')}, aktif büyümesi {fmt(ay,'%')}."
+                )
+            words.append(
+                "Konsolide ciro, faaliyet marjı ve FCF göstergeleri bu profilde ana kalite skoru olarak kullanılmadı."
+            )
         else:
             if rev is not None or ni is not None:
                 words.append(
