@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+from audit_readiness import readiness_from_audit
 
 ROOT=Path("audit_downloads")
 OUT=Path("audit_summary")
@@ -59,20 +60,6 @@ summary={
     ],
 }
 (OUT/"full_bist_audit_summary.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
-
-def readiness_from_audit(r):
-    """Conservative audit-only status, NOT a successfully rendered report's status."""
-    codes={x.get("code") for x in r.get("issues",[])}
-    profile=r.get("profile")
-    if r.get("status") in {"ERROR","CRITICAL"}:
-        return "REVIEW", "Motor-level failure"
-    if "HISTORY_UNAVAILABLE" in codes or "SHORT_HISTORY" in codes:
-        return "PARTIAL", "Missing or insufficient financial history"
-    if profile in {"GYO","Holding","Yatırım Ortaklığı"}:
-        return "VALUATION_PARTIAL", "Audit has no verified property/portfolio NAV evidence"
-    if r.get("status")=="WARNING":
-        return "REVIEW", "Provider/data warning requires reconciliation"
-    return "READY", "Audit checks passed; not proof of external statement reconciliation"
 
 
 rows=[]
