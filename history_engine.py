@@ -1012,6 +1012,18 @@ def build_historical_analysis(
         # project-heavy GYOs such as EKGYO.
         net_debt_now = _net_debt_if_complete(debt_now, cash_now, fininv_now)
         net_debt_old = _net_debt_if_complete(debt_old, cash_old, fininv_old)
+        # The ordinary report retains the provider comparison, but independent
+        # enterprise-value arithmetic requires all balance components to be
+        # reported for the SAME snapshot period.
+        net_debt_period_aligned = bool(
+            latest_period and all(
+                not series.empty and str(series.index[-1]) == latest_period
+                for series in (
+                    balance["financial_debt"], balance["cash"],
+                    balance["financial_investments"],
+                )
+            )
+        )
         current_ratio_now = _safe_ratio(ca_now, cl_now)
         current_ratio_old = _safe_ratio(ca_old, cl_old)
 
@@ -1088,6 +1100,7 @@ def build_historical_analysis(
             "financial_debt_yoy": _pct_change(debt_now, debt_old),
             "financial_investments": fininv_now,
             "net_debt_statement": net_debt_now,
+            "net_debt_statement_period_aligned": net_debt_period_aligned,
             "net_debt_provider": result.get("market",{}).get("net_debt"),
             "net_debt": (
                 result.get("market",{}).get("net_debt")
