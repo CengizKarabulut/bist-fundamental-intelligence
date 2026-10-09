@@ -1,5 +1,5 @@
 import unittest
-from statement_reconciliation import calculate_ratios, reconcile, diagnose_pb_denominator, implied_parent_equity_from_vendor_pb
+from statement_reconciliation import calculate_ratios, reconcile, diagnose_pb_denominator, implied_parent_equity_from_vendor_pb, pb_basis_needs_review
 
 class StatementReconciliationTests(unittest.TestCase):
     def test_independent_pe_pb_ev(self):
@@ -24,6 +24,11 @@ class StatementReconciliationTests(unittest.TestCase):
         self.assertAlmostEqual(diagnostic["total_equity_gap_fraction"],0.6)
         self.assertEqual(diagnostic["classification"],"PARENT_CANDIDATE_TIME_UNVERIFIED")
         self.assertFalse(diagnostic["is_independent_confirmation"])
+
+    def test_material_pb_basis_gap_requires_review(self):
+        self.assertTrue(pb_basis_needs_review({"parent_equity_gap_fraction":0.62}))
+        self.assertFalse(pb_basis_needs_review({"parent_equity_gap_fraction":0.03}))
+        self.assertFalse(pb_basis_needs_review({"parent_equity_gap_fraction":None}))
 
     def test_pb_negative_multiple_does_not_produce_false_parent_equity(self):
         self.assertIsNone(implied_parent_equity_from_vendor_pb(100,-1))
