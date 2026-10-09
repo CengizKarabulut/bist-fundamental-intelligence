@@ -92,6 +92,27 @@ Her rapor makine-okunur bir hazırlık statüsü taşır:
 
 GYO/Holding için NAD yoksa tüm rapor bozuk sayılmaz; finansal analiz devam eder fakat değerleme katmanı kısmi olarak işaretlenir.
 
+## Pusula karşılaştırması / bağımsız bilanço mutabakatı
+
+Pusula (186 hisselik kullanıcı kaynak dosyası) ile yapılan karşılaştırma,
+**toplam özkaynak** ile **ana ortaklığa ait özkaynak** ayrımının gerekli
+olduğunu ve günlük piyasa çarpanlarının finansal dönem kapanışındaki
+çarpanlarla aynı kabul edilemeyeceğini gösterdi.
+
+- F/K bağımsız olarak yalnız aynı tanımdaki ana ortaklık net kârı ve
+  tarih-bazı açık piyasa değeriyle teyit edilebilir.
+- PD/DD için kaynak orandan piyasa değeri / PD/DD ile türetilen özkaynak
+  `vendor_implied_equity` sadece **ters hesaplama teşhisidir**;
+  bağımsız bilanço kanıtı değildir. Ana ortaklığa ait özkaynak için
+  açık satır veya toplam özkaynak − kontrol gücü olmayan paylar gerekir.
+- FD/FAVÖK'te sadece finansal borç − nakit ile oluşturulan EV bir
+  basitleştirilmiş göstergedir; kira, azınlık ve finansal iştirak kapsamı
+  doğrulanmadan gerçek FD/FAVÖK olarak skora alınmaz.
+- Audit dosyasındaki `valuation_timestamp_status` fiyat ve sağlayıcı
+  oranı bazlarının henüz eşleştirilmediğini açıkça gösterir.
+- Audit genelinde `READY` geçici motor kontrol sonucudur; KAP finansal
+  tablolarıyla şirket bazında bağımsız mutabakat yapıldığı anlamına gelmez.
+
 ## Kaynak doğrulaması
 
 TradingView, İş Yatırım şirket kartı ve mali tablodan türetilen metrikler karşılaştırılır. Rapor uyumlu değerleri, güncelleme/baz farklarını, büyük sağlayıcı farklarını ve TMS 29 / yeniden ifade kaynaklı olası ayrışmaları ayrı gösterir. Veri güveni düşükse profesyonel sonuç daha temkinli yazılır; kaynak farkı sessizce ortalanmaz.
