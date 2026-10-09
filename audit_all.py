@@ -217,8 +217,9 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         ttm_parent_profit_try=parent_profit,
         parent_equity_try=parent_equity,
         net_debt_try=hs.get("net_debt_statement"),
-        # Do not substitute operating profit for EBITDA.
-        ttm_ebitda_try=None,
+        # EBITDA from exact dated statement line, or labeled EBIT + D&A proxy.
+        # Never infer it from a vendor's EV/EBITDA multiple.
+        ttm_ebitda_try=hs.get("ttm_ebitda"),
     )
     pb_basis_diagnostic=diagnose_pb_denominator(
         eng.fnum(row.get("market_cap_basic")),
@@ -334,6 +335,8 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         "quarterly_periods":hist.get("data_quality",{}).get("quarterly_periods"),
         "financial_period":hist.get("summary",{}).get("latest_period"),
         "valuation_reconciliation":vendor_reconciliation,
+        "ebitda_statement_source":hs.get("ttm_ebitda_source","UNAVAILABLE"),
+        "ebitda_statement_ttm":hs.get("ttm_ebitda"),
         "pb_basis_diagnostic":pb_basis_diagnostic,
         "valuation_timestamp_status":"PRICE_AND_VENDOR_RATIO_ASOF_NOT_IN_AUDIT",
         "valuation_input_rows":{"profit":profit_row,"equity":equity_row,"parent_equity":parent_equity_row},
