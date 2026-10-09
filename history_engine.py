@@ -986,6 +986,10 @@ def build_historical_analysis(
             key=_qkey,
         )
         latest_period = str(latest_periods[-1]) if latest_periods else None
+        # Never combine a stale TTM EBITDA numerator/denominator with a
+        # newer reported balance-sheet snapshot.
+        if latest_period is None or _qkey(latest_period) != latest_statement_quarter:
+            ttm_ebitda,ebitda_source = None,"REPORTING_PERIOD_MISMATCH"
 
         rev_yoy_latest = revenue_yoy.get(latest_period) if latest_period else None
         ni_yoy_latest = profit_yoy.get(latest_period) if latest_period else None
@@ -1064,6 +1068,7 @@ def build_historical_analysis(
             "ttm_net_income": ttm_ni,
             "ttm_ebitda": ttm_ebitda,
             "ttm_ebitda_source": ebitda_source,
+            "ttm_ebitda_reporting_period": latest_period if ttm_ebitda is not None else None,
             "revenue_ttm_yoy": _ttm_yoy(revenue_d),
             "net_income_ttm_yoy": _ttm_yoy(net_income_d),
             "ttm_gross_margin": _safe_ratio(ttm_gross_profit, ttm_rev, 100.0),
