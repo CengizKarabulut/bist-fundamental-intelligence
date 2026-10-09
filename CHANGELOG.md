@@ -1,5 +1,15 @@
 # Changelog
 
+## Geliştirme aşaması — 2026-10-09 (henüz release değil)
+
+- Finansal tablo bazlı F/K ve PD/DD mutabakatı için bağımsız hesaplama modülü eklendi. Ana ortaklık kalemleri açıkça tespit edilemiyorsa oran hesaplanmaz.
+- FD/FAVÖK için gerçek TTM FAVÖK doğrulanmadan sayı üretilmez.
+- BIST audit CSV çıktısına hesaplanan oranlar, kaynak karşılaştırmaları ve finansal satır adları eklendi.
+- TTM hesaplarında ardışık çeyrek zorunluluğu, eksik net borç bileşenlerinin sıfır sayılmaması, ROE/ROA için ortalama bilanço koruması eklendi.
+- Audit çıktılarına geçici hazırlık durumu ve açıklama eklendi.
+- Bu değişiklikler henüz yeni bir 621 şirketlik audit başarı raporu ile doğrulanmadı. v1.0.2 için önceki test sonuçları yeni kod için kanıt sayılamaz.
+
+
 ## 1.0.2 — 2026-10-09
 
 Son profesyonel inceleme yaması.
