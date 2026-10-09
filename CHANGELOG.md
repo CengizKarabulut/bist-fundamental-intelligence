@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.1.0-rc1 — 2026-10-10 (RELEASE CANDIDATE; doğrulama bekleniyor)
+
+- Pusula ve tüm BIST denetiminde saptanan tarih/ana ortaklık özkaynak
+  problemlerine yönelik satır kökeni ve ayrı mutabakat kayıtları.
+- Çoklu pay sınıfı seçimi için ISCTR / KRDMD tercihli benchmark eşleşmesi
+  ve aşırı çarpan koruması.
+- TTM FAVÖK: açık finansal tablo satırından veya birbirini izleyen dört
+  çeyrekteki faaliyet sonucu + amortisman kalemlerinden yeniden hesaplama.
+  Yeniden hesaplanan sonuç yaklaşık olarak etiketlenir; bankalar/GYO/holding
+  gibi profillerde uygulanmaz.
+- FD/FAVÖK yalnız aynı finansal dönem bilanço borç/nakit/yatırım kalemleri
+  ile ve geçerli FAVÖK verisi varsa üretilir. Veri yetersizse N/A.
+- Bağımsız F/K, PD/DD, FD/FAVÖK kapsaması ve FAVÖK kaynağı birleşik audit
+  raporuna eklenir; kalite kapısı F/K ve PD/DD kapsam düşüşlerini yakalar.
+- Testler: çeyrek sürekliliği, gerçek FAVÖK tercih sırası, yaklaşık hesap,
+  eksik dönem, uygunsuz şirket tipi, eksik net borç.
+- **#79 sonucu bu sürümün sonucu DEĞİLDİR.** v1.1.0-rc1,
+  yeni Regression Smoke Test ve Full BIST Audit sonucuna kadar Stable değildir.
+
+
 ## Geliştirme aşaması — 2026-10-09 (henüz release değil)
 
 ### Full BIST Audit #79 doğrulaması (9 Ekim 2026, 19:14)
