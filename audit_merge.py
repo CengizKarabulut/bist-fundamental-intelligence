@@ -15,6 +15,8 @@ OUT.mkdir(exist_ok=True)
 json_files=sorted(ROOT.rglob("audit_shard_*.json"))
 if not json_files:
     raise SystemExit("Audit shard JSON bulunamadı.")
+if len(json_files) != 8:
+    raise SystemExit(f"Tam BIST audit için 8 shard gerekli, bulunan: {len(json_files)}")
 
 all_results=[]
 universe_counts=[]
@@ -73,6 +75,15 @@ for r in results:
         "warning_count":r.get("warning_count",0),"metric_coverage":r.get("metric_coverage"),
         "core_rows_found":r.get("core_rows_found"),"core_rows_expected":r.get("core_rows_expected"),
         "quarterly_periods":r.get("quarterly_periods"),
+        "financial_period":r.get("financial_period"),
+        "roe_tv":(r.get("reconciled_metrics") or {}).get("roe",{}).get("tradingview"),
+        "roe_iy":(r.get("reconciled_metrics") or {}).get("roe",{}).get("is_yatirim"),
+        "roe_statement":(r.get("reconciled_metrics") or {}).get("roe",{}).get("statement_derived"),
+        "roa_tv":(r.get("reconciled_metrics") or {}).get("roa",{}).get("tradingview"),
+        "roa_iy":(r.get("reconciled_metrics") or {}).get("roa",{}).get("is_yatirim"),
+        "roa_statement":(r.get("reconciled_metrics") or {}).get("roa",{}).get("statement_derived"),
+        "roe_source_row":(r.get("reconciled_metrics") or {}).get("roe",{}).get("statement_row"),
+        "roa_source_row":(r.get("reconciled_metrics") or {}).get("roa",{}).get("statement_row"),
         "issue_codes":";".join(sorted({x.get("code","") for x in r.get("issues",[])})),
         "issues":" | ".join(f"{x.get('severity')}:{x.get('code')}:{x.get('detail')}" for x in r.get("issues",[])),
     })
