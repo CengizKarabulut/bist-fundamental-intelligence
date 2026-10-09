@@ -1,6 +1,18 @@
 # Changelog
 
-## 1.1.0-rc1 — 2026-10-10 (RELEASE CANDIDATE; doğrulama bekleniyor)
+## 1.1.0 — 2026-10-10 (STABLE; sınırlı bağımsız oran kapsamı)
+
+- **Full BIST Audit #100 doğrulandı:** 621/621 BIST, 100/100 XU100,
+  0 ERROR, 0 CRITICAL, 160 WARNING, 221 INFO, 240 OK;
+  bağımsız F/K 290, PD/DD 592, FD/FAVÖK **0**.
+- 8/8 audit shard, merge quality gate ve muhasebe testleri başarılı;
+  Regression Smoke Test #120 ayrıca başarılı.
+- FD/FAVÖK bağımsız hesaplaması için kaynak verileri yeterli olmadığından
+  hesap alanı N/A; mevcut sağlayıcı FD/FAVÖK oranları açık kaynak
+  atfıyla ayrı kalır. Kapsam iyileştirmesi v1.2'ye ertelenir.
+- Şirket statülerindeki WARNING ve REVIEW sonuçları saklanır; sıfırlanmaz.
+
+
 
 - Pusula ve tüm BIST denetiminde saptanan tarih/ana ortaklık özkaynak
   problemlerine yönelik satır kökeni ve ayrı mutabakat kayıtları.
@@ -16,8 +28,7 @@
   raporuna eklenir; kalite kapısı F/K ve PD/DD kapsam düşüşlerini yakalar.
 - Testler: çeyrek sürekliliği, gerçek FAVÖK tercih sırası, yaklaşık hesap,
   eksik dönem, uygunsuz şirket tipi, eksik net borç.
-- **#79 sonucu bu sürümün sonucu DEĞİLDİR.** v1.1.0-rc1,
-  yeni Regression Smoke Test ve Full BIST Audit sonucuna kadar Stable değildir.
+- #79, RC öncesindeki önceki karşılaştırma denetimidir. v1.1.0 kabulü #100 ile yapılmıştır.
 
 
 ## Geliştirme aşaması — 2026-10-09 (henüz release değil)
