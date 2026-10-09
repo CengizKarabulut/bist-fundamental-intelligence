@@ -49,6 +49,12 @@ INCOME_ROWS = {
     ],
 }
 
+NONCONTROLLING_EQUITY_ROWS = [
+    "Kontrol Gücü Olmayan Paylar",
+    "Azınlık Payları",
+    "Kontrol Gücü Olmayan Paylara Ait Özkaynaklar",
+]
+
 PARENT_EQUITY_ROWS = [
     "Ana Ortaklığa Ait Özkaynaklar",
     "Ana Ortaklık Paylarına Ait Özkaynaklar",
@@ -852,6 +858,19 @@ def build_historical_analysis(
         )
         if parent_equity_row:
             found["parent_equity"]=parent_equity_row
+        minority_equity_series,minority_equity_row=_find_series(
+            bs_q,NONCONTROLLING_EQUITY_ROWS,quarterly=True
+        )
+        if minority_equity_row:
+            found["noncontrolling_equity"]=minority_equity_row
+            # Total consolidated equity less explicitly stated minority ownership.
+            if not parent_equity_row and not balance["equity"].empty:
+                shared=balance["equity"].index.intersection(minority_equity_series.index)
+                parent_equity_series=(
+                    balance["equity"].loc[shared] - minority_equity_series.loc[shared]
+                )
+                found["parent_equity"]="DERIVED: "+str(found.get("equity"))+" - "+str(minority_equity_row)
+
         # Cash flow
         cashflow: dict[str, pd.Series] = {}
         if not cf_q.empty:
