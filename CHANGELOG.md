@@ -7,6 +7,8 @@ Kararlı sürüm son profesyonel audit düzeltmesi.
 - KAP'ta **Holdingler ve Yatırım Şirketleri** olarak sınıflanan ancak XHOLD endeks üyeliği üzerinden yakalanamayan ATSYH, ISBIR ve KERVN için holding profili düzeltildi.
 - Bu şirketlerde generic sanayi kalite/değerleme skoru yerine Holding/NAD metodolojisi zorunlu hale getirildi.
 - Profil regresyon kontrolleri bu üç edge-case'i kalıcı olarak kapsıyor.
+- Sigorta özkaynak/aktif oranı artık solvency/sermaye yeterliliği gibi yorumlanmıyor; yalnız bilanço bilgisi olarak gösteriliyor.
+- Tarihsel mali tablo sağlayıcıda bulunmayan şirketlerde skorun güncel çapraz-kesit veriye dayandığı açıkça belirtiliyor.
 
 
 ## 1.0.0 — 2026-10-09
