@@ -94,3 +94,14 @@ def diagnose_pb_denominator(market_cap_try, vendor_pb,
         "classification":basis,
         "is_independent_confirmation":False,
     }
+
+
+def pb_basis_needs_review(diagnostic, threshold=0.10):
+    """Flag material unexplained source/period differences, never a proven error."""
+    if not isinstance(diagnostic, dict):
+        return False
+    gap=diagnostic.get("parent_equity_gap_fraction")
+    try:
+        return gap is not None and math.isfinite(float(gap)) and float(gap)>threshold
+    except (TypeError,ValueError):
+        return False
