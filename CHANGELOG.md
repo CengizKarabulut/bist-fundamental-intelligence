@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.2 — 2026-10-09
+
+Son profesyonel inceleme yaması.
+
+- Banka dışı finansal şirketlerde XI_29 şablonundaki tamamen sıfır finans-sektörü satırları veri olarak kabul edilmez.
+- GLBMD benzeri broker/menkul değer şirketlerinde gerçek faaliyet sonucu ve ticari/faaliyet alacaklarına kontrollü fallback uygulanır.
+- Özel finansal motor raporu kullanılan satırın gerçek ekonomik adını gösterir.
+- Bankalarda özkaynak/aktif oranının BDDK sermaye yeterlilik oranı (SYR) olmadığı açıkça belirtilir.
+- Yeni fallback davranışı regresyon testine kilitlenmiştir.
+
+
 ## 1.0.1 — 2026-10-09
 
 Kararlı sürüm son profesyonel audit düzeltmesi.
