@@ -935,6 +935,11 @@ def overall(t,p,s,perf,history=None,validation=None,sector_code=None,sector_perf
         )
 
     # Historical financial statement synthesis.
+    if history and history.get("error"):
+        words.append(
+            "Tarihsel mali tablo katmanı sağlayıcıdan alınamadı; bu rapordaki skorlar güncel "
+            "çapraz-kesit veriye dayanır ve tarihsel finansal teyit içermez."
+        )
     if history and not history.get("error"):
         hs=history.get("summary",{})
         period=hs.get("latest_period")
@@ -982,7 +987,13 @@ def overall(t,p,s,perf,history=None,validation=None,sector_code=None,sector_perf
                     f"Bilanço tarafında özkaynak büyümesi {fmt(ey,'%')}, aktif büyümesi {fmt(ay,'%')}."
                 )
             if eqa is not None:
-                words.append(f"Özkaynak/aktif oranı {eqa:.1f}% seviyesinde.")
+                if p=="Sigorta":
+                    words.append(
+                        f"Özkaynak/aktif oranı {eqa:.1f}% yalnız bilanço bilgisi olarak gösteriliyor; "
+                        "sermaye yeterliliği/solvency oranı olarak yorumlanmadı."
+                    )
+                else:
+                    words.append(f"Özkaynak/aktif oranı {eqa:.1f}% seviyesinde.")
             words.append(
                 f"{p} profilinde sanayi tipi FAVÖK, FCF ve net borç/FAVÖK metrikleri ana karar setine alınmadı."
             )
@@ -1211,7 +1222,7 @@ def special_profile_html(history):
             ("Teknik Denge",money(m.get("technical_balance"))),
             ("Teknik Marj",num(m.get("technical_margin"),"%")),
             ("Net Kâr Büyümesi",num(m.get("net_income_yoy_special"),"%")),
-            ("Özkaynak/Aktif",num(m.get("equity_to_assets"),"%")),
+            ("Özkaynak/Aktif (bilgi)",num(m.get("equity_to_assets"),"%")),
         ]
     elif prof=="Finansal":
         pairs=[
