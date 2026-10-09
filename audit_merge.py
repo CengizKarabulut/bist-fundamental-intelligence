@@ -51,6 +51,16 @@ summary={
     "status_counts":dict(status_counts),
     "profile_counts":dict(profile_counts),
     "issue_counts":dict(issue_counts),
+    "independent_valuation_coverage":{
+        key:sum(
+            1 for r in results
+            if (r.get("valuation_reconciliation") or {}).get(key,{}).get("calculated") is not None
+        )
+        for key in ("pe","pb","ev")
+    },
+    "ebitda_source_counts":dict(Counter(
+        (r.get("ebitda_statement_source") or "UNAVAILABLE") for r in results
+    )),
     "top_issues":[
         {
             "code":code,
@@ -126,6 +136,12 @@ for k in ["ERROR","CRITICAL","WARNING","INFO","OK"]:
     lines.append(f"- {k}: **{status_counts.get(k,0)}**")
 lines += ["","## Geçici denetim hazırlığı (nihai tek-hisse raporu statüsü değildir)"]
 for k,v in sorted(summary["audit_readiness_provisional_counts"].items()):
+    lines.append(f"- {k}: {v}")
+lines += ["","## Bağımsız değerleme kapsaması (raporlanan oranlar yerine bağımsız hesap)"]
+for k,v in summary["independent_valuation_coverage"].items():
+    lines.append(f"- {k.upper()}: {v} / {len(results)}")
+lines += ["","## EBITDA kaynak durumu"]
+for k,v in sorted(summary["ebitda_source_counts"].items()):
     lines.append(f"- {k}: {v}")
 lines += ["","## En sık hata/uyarı kodları"]
 for code,count in issue_counts.most_common(25):
