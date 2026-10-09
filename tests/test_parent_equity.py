@@ -11,6 +11,15 @@ class ParentEquityTests(unittest.TestCase):
         self.assertEqual(row,"Ana Ortaklığa Ait Özkaynaklar")
         self.assertEqual(float(series["2026Q2"]),120)
         self.assertAlmostEqual(calculate_ratios(1200,100,120)["pb"],10)
+    def test_minority_interest_subtraction_has_explicit_inputs(self):
+        from history_engine import NONCONTROLLING_EQUITY_ROWS
+        d=pd.DataFrame({"2026Q2":[150,30]},
+            index=["Özkaynaklar","Kontrol Gücü Olmayan Paylar"])
+        total,_=_find_series(d,["Özkaynaklar"])
+        minority,name=_find_series(d,NONCONTROLLING_EQUITY_ROWS)
+        self.assertEqual(name,"Kontrol Gücü Olmayan Paylar")
+        self.assertEqual(float(total["2026Q2"]-minority["2026Q2"]),120)
+
     def test_unattributed_total_is_not_parent(self):
         d=pd.DataFrame({"2026Q2":[150]},
              index=["Özkaynaklar"])
