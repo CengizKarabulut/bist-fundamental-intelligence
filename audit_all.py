@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 
 import analyze as eng
-from statement_reconciliation import calculate_ratios, reconcile, diagnose_pb_denominator, pb_basis_needs_review
+from statement_reconciliation import calculate_ratios, reconcile, diagnose_pb_denominator, pb_basis_needs_review, extreme_calculated_multiple
 from history_engine import build_historical_analysis
 
 OUT = Path("audit_results")
@@ -245,6 +245,14 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         }
         for key,iykey in (("pe","iy_pe"),("pb","iy_pb"),("ev","iy_ev_ebitda"))
     }
+
+    for multiple_key in ("pe", "pb", "ev"):
+        if extreme_calculated_multiple(multiple_key, independent[multiple_key]):
+            add_issue(
+                issues, "WARNING", "CALCULATED_MULTIPLE_EXTREME",
+                f"{multiple_key}: independently calculated={independent[multiple_key]:.3f}; "
+                "check selected share class, capitalization basis, statement units and date."
+            )
 
     # 4) Provider cross-section conflicts / suspicious ranges.
     for key,iy_col in {
