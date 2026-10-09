@@ -1,6 +1,6 @@
 # BIST Fundamental Intelligence
 
-BIST Fundamental Intelligence v1.0.2 Stable; bir BIST sembolünü alıp güncel piyasa/temel verileri, tarihsel mali tabloları, sektör/endüstri dağılımlarını, BIST100 karşılaştırmasını ve şirket tipine özel finansal kuralları tek bir profesyonel HTML/JSON raporunda birleştiren araştırma motorudur.
+BIST Fundamental Intelligence v1.1.0-rc1 (doğrulama adayı); bir BIST sembolünü alıp güncel piyasa/temel verileri, tarihsel mali tabloları, sektör/endüstri dağılımlarını, BIST100 karşılaştırmasını ve şirket tipine özel finansal kuralları tek bir profesyonel HTML/JSON raporunda birleştiren araştırma motorudur.
 
 Amaç tek bir AL/SAT puanı üretmek değildir. Şirket kalitesi, büyüme, kârlılık, finansal sağlık, nakit kalitesi, değerleme ve göreli konum ayrı tutulur.
 
@@ -14,6 +14,29 @@ Yerel kullanım:
     python analyze.py ASELS
 
 Windows'ta HISSE_ANALIZ.bat da kullanılabilir.
+
+## v1.1 aday sürüm ve kabul koşulları
+
+**v1.1.0-rc1 henüz Stable değildir.** En son doğrulanmış tam BIST
+artifact'ı, 9 Ekim 2026 tarihli #79 çalışmasıdır (621 şirket;
+ERROR=0, CRITICAL=0); bu artifact yeni FAVÖK ve pay sınıfı
+düzeltmelerinden **önce** üretildi.
+
+Aday sürümde tam audit sırasında:
+- 8/8 shard, Regression Smoke Test ve birleşik release quality gate geçmeli;
+- benzersiz şirket sayısı >=600, XU100 >=100 olmalı ve evren sayıları uyuşmalı;
+- ERROR ve CRITICAL sıfır olmalı;
+- bağımsız F/K kapsamı >=200, PD/DD kapsamı >=450 olmalı;
+- FD/FAVÖK yalnız açıklanabilir finansal tablo kaynakları ve dönem-uyumlu
+  net borç ile üretilmeli. Veri yoksa N/A meşru ve gereklidir.
+- Kaynak farkları WARNING/REVIEW olarak kalabilir; sayıları sıfırlamak için
+  muhasebe verisi uydurulmaz.
+
+`full_bist_audit.csv` artık bağımsız F/K, PD/DD, FD/FAVÖK; TTM FAVÖK
+kaynağı, özkaynak dayanağı ve kaynak mutabakat bilgilerini sunar.
+`full_bist_audit_summary.json` oran kapsamlarını sayar.
+`audit_readiness_provisional` ayrı bir **ön denetim statüsüdür**;
+tekil HTML raporunun nihai statüsüyle karıştırılmamalıdır.
 
 ## Veri otoritesi
 
