@@ -33,6 +33,11 @@ INCOME_ROWS = {
         "Amortisman Giderleri", "Amortisman ve İtfa Giderleri",
         "Amortisman ve Tükenme Payları",
     ],
+    "ebitda": [
+        "FAVÖK", "FAVOK", "EBITDA",
+        "Faiz Vergi Amortisman Öncesi Kar",
+        "Faiz Vergi ve Amortisman Öncesi Kar",
+    ],
     # Bank / financial institution candidates
     "interest_income": [
         "Faiz Gelirleri", "Faiz ve Benzeri Gelirler",
@@ -913,6 +918,8 @@ def build_historical_analysis(
         net_income_d = _discrete_from_ytd(net_income)
         gross_profit_d = _discrete_from_ytd(gross_profit)
         operating_profit_d = _discrete_from_ytd(operating_profit)
+        ebitda_d = _discrete_from_ytd(income["ebitda"])
+        depreciation_d = _discrete_from_ytd(income["depreciation"])
         ocf_d = _discrete_from_ytd(cashflow.get("operating_cash_flow", pd.Series(dtype=float)))
         capex_d = _discrete_from_ytd(cashflow.get("capex", pd.Series(dtype=float)))
         fcf_d = _discrete_from_ytd(cashflow.get("free_cash_flow", pd.Series(dtype=float)))
@@ -921,6 +928,32 @@ def build_historical_analysis(
         ttm_ni = _ttm(net_income_d)
         ttm_gross_profit = _ttm(gross_profit_d)
         ttm_operating_profit = _ttm(operating_profit_d)
+        # Prefer an explicit FAVÖK line in the same statement. Otherwise EBIT
+        # plus depreciation/amortization is only a reconstructed approximation.
+        # Both reconstructed components must span the SAME four quarters.
+        ttm_ebitda = None
+        ebitda_source = "UNAVAILABLE"
+        latest_statement_quarter = max(
+            (_qkey(k) for k in net_income.index if _qkey(k)!=(0,0)),
+            default=(0,0),
+        )
+        ebitda_keys = _consecutive_quarters(ebitda_d,4)
+        op_keys = _consecutive_quarters(operating_profit_d,4)
+        dep_keys = _consecutive_quarters(depreciation_d,4)
+        def ends_on_statement_period(keys):
+            return bool(keys and _qkey(keys[0]) == latest_statement_quarter)
+        if profile not in {"Banka","Sigorta","Finansal","Holding","Yatırım Ortaklığı","GYO"}:
+            if ends_on_statement_period(ebitda_keys):
+                ttm_ebitda = _ttm(ebitda_d)
+                ebitda_source = "EXPLICIT_INCOME_STATEMENT"
+            elif (ends_on_statement_period(op_keys)
+                  and ends_on_statement_period(dep_keys)
+                  and op_keys == dep_keys):
+                ttm_ebitda = (
+                    float(sum(float(operating_profit_d[k]) for k in op_keys))
+                    + float(sum(abs(float(depreciation_d[k])) for k in dep_keys))
+                )
+                ebitda_source = "RECONSTRUCTED_OPERATING_PROFIT_PLUS_DA"
         ttm_ocf = _ttm(ocf_d)
         ttm_capex = None
         capex_keys = _consecutive_quarters(capex_d, 4)
@@ -1014,6 +1047,8 @@ def build_historical_analysis(
             "annual_self_history": annual_history,
             "ttm_revenue": ttm_rev,
             "ttm_net_income": ttm_ni,
+            "ttm_ebitda": ttm_ebitda,
+            "ttm_ebitda_source": ebitda_source,
             "revenue_ttm_yoy": _ttm_yoy(revenue_d),
             "net_income_ttm_yoy": _ttm_yoy(net_income_d),
             "ttm_gross_margin": _safe_ratio(ttm_gross_profit, ttm_rev, 100.0),
