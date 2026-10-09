@@ -10,6 +10,8 @@ def main() -> None:
     ap.add_argument("--summary", default="audit_summary/full_bist_audit_summary.json")
     ap.add_argument("--min-universe", type=int, default=600)
     ap.add_argument("--min-xu100", type=int, default=100)
+    ap.add_argument("--min-independent-pe", type=int, default=200)
+    ap.add_argument("--min-independent-pb", type=int, default=450)
     args = ap.parse_args()
 
     path = Path(args.summary)
@@ -29,6 +31,14 @@ def main() -> None:
         failures.append("Status totals do not match audited company count")
     if reported and universe != reported:
         failures.append(f"symbols_checked={universe} != universe_count={reported}")
+    coverage = data.get("independent_valuation_coverage")
+    if not isinstance(coverage, dict):
+        failures.append("independent_valuation_coverage missing")
+    else:
+        if int(coverage.get("pe",0) or 0) < args.min_independent_pe:
+            failures.append(f"independent P/E coverage={coverage.get('pe')} < {args.min_independent_pe}")
+        if int(coverage.get("pb",0) or 0) < args.min_independent_pb:
+            failures.append(f"independent P/B coverage={coverage.get('pb')} < {args.min_independent_pb}")
     if errors:
         failures.append(f"ERROR={errors}")
     if critical:
