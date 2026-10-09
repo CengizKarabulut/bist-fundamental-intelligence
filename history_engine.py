@@ -490,9 +490,15 @@ def _build_commentary(summary: dict[str, Any], profile: str) -> dict[str, Any]:
             )
         eq_assets=summary.get("equity_to_assets")
         if eq_assets is not None:
-            (strengths if eq_assets>=10 else risks if eq_assets<7 else watch).append(
-                f"Özkaynak/aktif oranı {_fmt(eq_assets,'%')}."
-            )
+            if profile=="Sigorta":
+                watch.append(
+                    f"Özkaynak/aktif oranı {_fmt(eq_assets,'%')} yalnız bilanço bilgisi olarak gösteriliyor; "
+                    "sigorta sermaye yeterliliği/solvency oranının yerine kullanılmadı."
+                )
+            else:
+                (strengths if eq_assets>=10 else risks if eq_assets<7 else watch).append(
+                    f"Özkaynak/aktif oranı {_fmt(eq_assets,'%')}."
+                )
         return {"paragraphs": paragraphs, "strengths": strengths, "risks": risks, "watch": watch}
 
     if rev_yoy is not None or ni_yoy is not None:
