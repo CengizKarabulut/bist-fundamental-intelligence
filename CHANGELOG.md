@@ -2,6 +2,18 @@
 
 ## Geliştirme aşaması — 2026-10-09 (henüz release değil)
 
+### Full BIST Audit #79 doğrulaması (9 Ekim 2026, 19:14)
+
+- 621/621 benzersiz şirket; XU100 100/100, ERROR 0, CRITICAL 0.
+- WARNING 160, INFO 221, OK 240; önceki #74 raporunda WARNING 141. Yeni PB_BASIS_RECONCILIATION_REQUIRED uyarısı 24 şirket, bunların 19'u önceki audit'te WARNING değildi.
+- Bağımsız hesaplanan F/K 290 şirket, PD/DD 592 şirket, FD/FAVÖK 0 şirket; hesaplama kapsaması sürmektedir.
+- İki audit arasında temsilci pay sınıfı ISBTR → ISCTR değişti. ISBTR'nin önceki bağımsız PD/DD'si yaklaşık 658185x iken ISCTR yaklaşık 0,76x çıktı. Çoklu pay sınıfları için kararlı seçim gereklidir.
+- #79 SONRASI DÜZELTME: ISCTR ve KRDMD şirket karşılaştırmasında tercihli temsilci pay sınıfı olarak seçilecek; veri yoksa normal seçim kullanılacak.
+- #79 SONRASI DÜZELTME: bağımsız hesaplanan F/K, PD/DD ve FD/FAVÖK olağan dışı büyüklükleri ayrıca WARNING üretir; muhasebe hatası hükmü değildir.
+- Tercihli pay sınıfı ve uç çarpan için regresyon testleri eklendi; sonraki full-market çalışmanın sonucu **henüz doğrulanmadı**.
+
+
+
 ### Full BIST Audit #74 doğrulaması (kullanıcı artifact'ı)
 
 - 621/621 şirket, XU100 100/100; ERROR 0, CRITICAL 0, WARNING 141, INFO 228, OK 252.
