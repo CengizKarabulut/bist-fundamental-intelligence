@@ -2,6 +2,16 @@
 
 ## Geliştirme aşaması — 2026-10-09 (henüz release değil)
 
+### Full BIST Audit #74 doğrulaması (kullanıcı artifact'ı)
+
+- 621/621 şirket, XU100 100/100; ERROR 0, CRITICAL 0, WARNING 141, INFO 228, OK 252.
+- Bağımsız P/B kapsamı 592 şirkete çıktı (önceki audit: 0); bağımsız P/E: 289, FD/FAVÖK: 0.
+- 17 şirkette kaynak PD/DD'den ters hesaplanan özkaynak ile bilanço ana ortaklık özkaynağı >%10 farklı; 15 şirkette sağlayıcı tarihsel finansalları eksik.
+- Önceki BIST audit ile karşılaştırmada 7 ortak hissenin statüsü değişti; pay sınıfı evreni KRDMB yerine KRDMA olarak değişti.
+- Sonraki iki düzeltme: P/B < 1 için mutabakat farkının 1 tabanlı paydayla maskelenmesi kaldırıldı, >%10 özkaynak baz farkı WARNING ile incelemeye taşındı.
+- **Bu sonraki kod değişikliklerinin tam audit test sonuçları henüz burada doğrulanmadı.**
+
+
 - Finansal tablo bazlı F/K ve PD/DD mutabakatı için bağımsız hesaplama modülü eklendi. Ana ortaklık kalemleri açıkça tespit edilemiyorsa oran hesaplanmaz.
 - FD/FAVÖK için gerçek TTM FAVÖK doğrulanmadan sayı üretilmez.
 - BIST audit CSV çıktısına hesaplanan oranlar, kaynak karşılaştırmaları ve finansal satır adları eklendi.
