@@ -14,6 +14,7 @@ on:
       - "requirements.txt"
       - "quality_gate.py"
       - "version.py"
+      - "VERSION"
       - ".github/workflows/full_bist_audit.yml"
 
 concurrency:
