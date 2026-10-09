@@ -216,7 +216,11 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         market_cap_try=eng.fnum(row.get("market_cap_basic")),
         ttm_parent_profit_try=parent_profit,
         parent_equity_try=parent_equity,
-        net_debt_try=hs.get("net_debt_statement"),
+        net_debt_try=(
+            hs.get("net_debt_statement")
+            if hs.get("net_debt_statement_period_aligned",False)
+            else None
+        ),
         # EBITDA from exact dated statement line, or labeled EBIT + D&A proxy.
         # Never infer it from a vendor's EV/EBITDA multiple.
         ttm_ebitda_try=hs.get("ttm_ebitda"),
