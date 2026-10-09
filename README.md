@@ -1,6 +1,6 @@
 # BIST Fundamental Intelligence
 
-BIST Fundamental Intelligence v1.0; bir BIST sembolünü alıp güncel piyasa/temel verileri, tarihsel mali tabloları, sektör/endüstri dağılımlarını, BIST100 karşılaştırmasını ve şirket tipine özel finansal kuralları tek bir profesyonel HTML/JSON raporunda birleştiren araştırma motorudur.
+BIST Fundamental Intelligence v1.0.1 Stable; bir BIST sembolünü alıp güncel piyasa/temel verileri, tarihsel mali tabloları, sektör/endüstri dağılımlarını, BIST100 karşılaştırmasını ve şirket tipine özel finansal kuralları tek bir profesyonel HTML/JSON raporunda birleştiren araştırma motorudur.
 
 Amaç tek bir AL/SAT puanı üretmek değildir. Şirket kalitesi, büyüme, kârlılık, finansal sağlık, nakit kalitesi, değerleme ve göreli konum ayrı tutulur.
 
@@ -151,9 +151,9 @@ Bir analiz artifact'ında veri bulunabildiği ölçüde SEMBOL_report.html, SEMB
 - Bazı yeni/özel finansal şirketlerde tarihsel tablo sağlayıcıda bulunmayabilir; rapor PARTIAL olarak devam eder.
 - Skorlar araştırma modelidir; al/sat kararı değildir.
 
-## v1.0 doğrulama durumu
+## v1.0.1 doğrulama durumu
 
-v1.0 motoru temsili profil regresyon setini başarıyla geçmiştir. Son tam BIST denetiminde 621 benzersiz şirket ve 100/100 XU100 bileşeni kontrol edilmiş; motor seviyesinde ERROR veya CRITICAL bulgu kalmamıştır. Kalan uyarılar veri sağlayıcı farkı, ekonomik olarak anlamsız negatif çarpanlar, sınırlı tarihçe veya sağlayıcıda bulunmayan finansallar gibi veri-kalite başlıkları olarak ayrı tutulur.
+v1.0.1 motoru temsili profil regresyon setini başarıyla geçmiştir. Son tam BIST denetiminde 621 benzersiz şirket ve 100/100 XU100 bileşeni kontrol edilmiş; motor seviyesinde ERROR veya CRITICAL bulgu kalmamıştır. Kalan uyarılar veri sağlayıcı farkı, ekonomik olarak anlamsız negatif çarpanlar, sınırlı tarihçe veya sağlayıcıda bulunmayan finansallar gibi veri-kalite başlıkları olarak ayrı tutulur.
 
 
 ## Release Quality Gate
@@ -163,7 +163,7 @@ v1.0 motoru temsili profil regresyon setini başarıyla geçmiştir. Son tam BIS
 - herhangi bir **ERROR**,
 - herhangi bir **CRITICAL**,
 - 600'ün altında benzersiz BIST şirketi,
-- 95'in altında XU100 bileşeni.
+- 100'ün altında XU100 bileşeni.
 
 WARNING ve INFO seviyeleri veri sağlayıcı farkı, sınırlı tarihçe veya ekonomik olarak anlamsız çarpanlar gibi araştırma notlarıdır; sessizce yok edilmez ancak motor arızası olarak değerlendirilmez. Son tam doğrulamada **621 şirket / XU100 100/100 / ERROR 0 / CRITICAL 0** elde edilmiştir.
 
