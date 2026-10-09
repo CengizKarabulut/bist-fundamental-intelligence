@@ -902,6 +902,17 @@ def build_historical_analysis(
         current_ratio_now = _safe_ratio(ca_now, cl_now)
         current_ratio_old = _safe_ratio(ca_old, cl_old)
 
+        avg_equity_ttm=(
+            (equity_now+equity_old)/2.0
+            if equity_now is not None and equity_old is not None and (equity_now+equity_old)!=0
+            else equity_now
+        )
+        avg_assets_ttm=(
+            (assets_now+assets_old)/2.0
+            if assets_now is not None and assets_old is not None and (assets_now+assets_old)!=0
+            else assets_now
+        )
+
         # Own-history metrics. ROE/ROA use end-period balances as a
         # consistent approximation because average balances are not guaranteed
         # across all provider schemas.
@@ -955,6 +966,8 @@ def build_historical_analysis(
             "ttm_gross_margin": _safe_ratio(ttm_gross_profit, ttm_rev, 100.0),
             "ttm_operating_margin": _safe_ratio(ttm_operating_profit, ttm_rev, 100.0),
             "ttm_net_margin": _safe_ratio(ttm_ni, ttm_rev, 100.0),
+            "ttm_roe_proxy": _safe_ratio(ttm_ni, avg_equity_ttm, 100.0),
+            "ttm_roa_proxy": _safe_ratio(ttm_ni, avg_assets_ttm, 100.0),
             "ttm_operating_cash_flow": ttm_ocf,
             "ttm_capex": ttm_capex,
             "ttm_free_cash_flow": ttm_fcf,
