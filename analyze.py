@@ -107,6 +107,10 @@ def _retry_call(fn, attempts=2, base_delay=0.6):
         raise last
 
 OPERATING_XHOLD_OVERRIDES={"TAVHL","SISE"}
+# KAP classifies these as "Mali Kuruluşlar / Holdingler ve Yatırım Şirketleri"
+# although liquidity/market eligibility can keep them outside XHOLD.  They must
+# still use the NAV/holding methodology rather than generic industrial scoring.
+HOLDING_PROFILE_OVERRIDES={"ATSYH","ISBIR","KERVN"}
 
 @lru_cache(maxsize=16)
 def _official_members(code):
@@ -122,6 +126,11 @@ def profile(r):
     ind=str(r.get("industry") or "").casefold()
     d=str(r.get("description") or r.get("name") or "").casefold()
     sym=str(r.get("symbol") or r.get("ticker") or "").split(":")[-1].upper()
+
+    # Audited KAP business-model exceptions have priority over generic vendor
+    # sectors and index eligibility.
+    if sym in HOLDING_PROFILE_OVERRIDES:
+        return "Holding"
 
     # Official BIST index membership has priority over provider sector labels.
     # This is particularly important for holdings and brokers, where consolidated
