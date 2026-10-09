@@ -5,8 +5,8 @@ echo ============================================
 echo       BIST FUNDAMENTAL INTELLIGENCE
 echo ============================================
 echo.
-set /p SYMBOL=Analiz edilecek hisse kodu: 
+set /p "SYMBOL=Analiz edilecek hisse kodu: "
 echo.
-python analyze.py %SYMBOL%
+python analyze.py "%SYMBOL%"
 echo.
 pause
