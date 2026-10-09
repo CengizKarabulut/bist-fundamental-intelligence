@@ -442,6 +442,27 @@ def analyze(t,p,g):
         }
     return out
 
+def enrich_target_from_history(t,history):
+    """Attach target-only İş Yatırım metrics without screening the whole BIST.
+
+    Cross-sectional medians remain TradingView-based. This keeps a single-stock
+    report fast while preserving İş Yatırım as the target-company authority.
+    """
+    t=t.copy()
+    if not history or history.get("error"):
+        return t
+    market=history.get("market",{}) or {}
+    summary=history.get("summary",{}) or {}
+    available=bool(history.get("market_source_available",False))
+    t["iy_market_available"]=available
+    t["iy_pe"]=fnum(market.get("pe"))
+    t["iy_pb"]=fnum(market.get("pb"))
+    t["iy_ev_ebitda"]=fnum(market.get("ev_ebitda"))
+    t["iy_roe"]=fnum(summary.get("ttm_roe_proxy"))
+    t["iy_roa"]=fnum(summary.get("ttm_roa_proxy"))
+    return t
+
+
 def apply_profile_primary_source(a,p,history,g):
     """Apply profile-specific primary sources and accounting sanity guards."""
     if not history or history.get("error"):
@@ -1473,11 +1494,11 @@ def main():
     ap=argparse.ArgumentParser(); ap.add_argument("symbol"); a=ap.parse_args(); sym=a.symbol.upper().replace("BIST:","").replace(".IS","").strip()
     if not re.fullmatch(r"[A-Z0-9]{2,12}", sym):
         raise SystemExit("Geçersiz BIST sembolü. Yalnız A-Z / 0-9 ve 2-12 karakter kullanın.")
-    print("[1/11] Tüm BIST + İş Yatırım karşılaştırma evreni alınıyor..."); u=universe(include_isyatirim=True); h=u[u.symbol==sym]
+    print("[1/11] Tüm BIST karşılaştırma evreni alınıyor..."); u=universe(include_isyatirim=False); h=u[u.symbol==sym]
     if h.empty:raise SystemExit(f"{sym} bulunamadı")
     t=h.iloc[0].copy(); t["symbol"]=sym; p=profile(t)
     print("[2/11] BIST100 üyeleri alınıyor..."); xs=xu100(u)
-    print("[3/11] BorsaPy/KAP ve 12 çeyreklik mali tablolar analiz ediliyor..."); REPORTS.mkdir(exist_ok=True); hist=build_historical_analysis(sym,p,REPORTS)
+    print("[3/11] BorsaPy/KAP ve 12 çeyreklik mali tablolar analiz ediliyor..."); REPORTS.mkdir(exist_ok=True); hist=build_historical_analysis(sym,p,REPORTS); t=enrich_target_from_history(t,hist)
     print("[4/11] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs,p); an=analyze(t,p,g); an=apply_profile_primary_source(an,p,hist,g); sc=scores(an,p)
     print("[5/11] Her faktör yorumlanıyor..."); cm={k:factor_comment(v,p) for k,v in an.items()}
     print("[6/11] XU100 ve sektör endeksi performansı..."); ip=index_perf(); secidx=sector_index_code(t,p); sip=bist_index_perf(secidx)
