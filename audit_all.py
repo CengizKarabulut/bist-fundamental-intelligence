@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 
 import analyze as eng
-from statement_reconciliation import calculate_ratios, reconcile, diagnose_pb_denominator
+from statement_reconciliation import calculate_ratios, reconcile, diagnose_pb_denominator, pb_basis_needs_review
 from history_engine import build_historical_analysis
 
 OUT = Path("audit_results")
@@ -226,6 +226,15 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         consolidated_equity_try=hs.get("equity"),
         parent_equity_try=hs.get("parent_equity"),
     )
+    # Audit only; this does not prove either source is wrong. Dates and
+    # consolidation basis may differ and require human reconciliation.
+    if pb_basis_needs_review(pb_basis_diagnostic):
+        add_issue(
+            issues, "WARNING", "PB_BASIS_RECONCILIATION_REQUIRED",
+            "Provider-implied equity vs statement parent equity differs "
+            f"by {float(pb_basis_diagnostic['parent_equity_gap_fraction'])*100:.1f}%; "
+            "price date and financial-statement consolidation basis unverified."
+        )
     vendor_reconciliation={
         key:{
             "calculated":independent[key],
