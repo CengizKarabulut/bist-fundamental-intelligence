@@ -42,6 +42,9 @@ jobs:
       - name: Python sözdizimi kontrolü
         run: python -m py_compile analyze.py history_engine.py special_profiles.py regression_checks.py version.py
 
+      - name: Muhasebe hesaplama güvenlik testleri
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+
       - name: ASELS sanayi/savunma testi
         run: timeout 240s python analyze.py ASELS
 
