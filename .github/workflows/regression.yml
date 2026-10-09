@@ -12,6 +12,7 @@ on:
       - "regression_checks.py"
       - "requirements.txt"
       - "version.py"
+      - "VERSION"
       - ".github/workflows/regression.yml"
   workflow_dispatch:
 
