@@ -861,6 +861,13 @@ def build_historical_analysis(
         for key, candidates in INCOME_ROWS.items():
             excludes = ["marj","oran","buyume","degisim"] if key == "ebitda" else None
             s, row = _find_series(inc_q, candidates, quarterly=True, excludes=excludes)
+            # "FAVÖK (%)" may normalize to the same label as FAVÖK; do
+            # not mistake a percentage for a monetary amount.
+            if key == "ebitda" and row and (
+                "%" in row or "yuzde" in _norm(row)
+                or "margin" in _norm(row)
+            ):
+                s, row = pd.Series(dtype=float), None
             income[key] = s
             if row:
                 found[key] = row
