@@ -276,6 +276,20 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         "core_rows_found":hist.get("data_quality",{}).get("core_rows_found"),
         "core_rows_expected":hist.get("data_quality",{}).get("core_rows_expected"),
         "quarterly_periods":hist.get("data_quality",{}).get("quarterly_periods"),
+        "financial_period":hist.get("summary",{}).get("latest_period"),
+        "reconciled_metrics":{
+            key:{
+                "tradingview":eng.fnum(row.get(eng.M[key][0])),
+                "is_yatirim":eng.fnum(row.get(iykey)),
+                "statement_derived":eng.fnum(hist.get("summary",{}).get(stmtkey)),
+                "statement_row":hist.get("rows_found",{}).get(rowkey),
+                "statement_period":hist.get("summary",{}).get("latest_period"),
+            }
+            for key,iykey,stmtkey,rowkey in (
+                ("roe","iy_roe","ttm_roe_proxy","equity"),
+                ("roa","iy_roa","ttm_roa_proxy","total_assets"),
+            )
+        },
         "issues":issues,
     }
 
