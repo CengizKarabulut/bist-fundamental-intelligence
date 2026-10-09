@@ -1,6 +1,6 @@
 # BIST Fundamental Intelligence
 
-BIST Fundamental Intelligence v1.0.1 Stable; bir BIST sembolünü alıp güncel piyasa/temel verileri, tarihsel mali tabloları, sektör/endüstri dağılımlarını, BIST100 karşılaştırmasını ve şirket tipine özel finansal kuralları tek bir profesyonel HTML/JSON raporunda birleştiren araştırma motorudur.
+BIST Fundamental Intelligence v1.0.2 Stable; bir BIST sembolünü alıp güncel piyasa/temel verileri, tarihsel mali tabloları, sektör/endüstri dağılımlarını, BIST100 karşılaştırmasını ve şirket tipine özel finansal kuralları tek bir profesyonel HTML/JSON raporunda birleştiren araştırma motorudur.
 
 Amaç tek bir AL/SAT puanı üretmek değildir. Şirket kalitesi, büyüme, kârlılık, finansal sağlık, nakit kalitesi, değerleme ve göreli konum ayrı tutulur.
 
@@ -63,7 +63,7 @@ Sigorta motoru sanayi şirketi ciro/FAVÖK/FCF mantığına zorlanmaz. Net yazı
 
 ### Banka dışı finansal şirketler
 
-Finansal kiralama, faktoring, menkul değerler ve benzeri şirketlerde UFRS/XI_29 fallback uygulanır. Finans sektörü faaliyet sonucu, finansal alacaklar, finansal yükümlülükler, net kâr, aktif ve özkaynak trendi ayrı değerlendirilir. Sanayi tipi net marj/FAVÖK/FCF ana skora zorlanmaz.
+Finansal kiralama, faktoring, menkul değerler ve benzeri şirketlerde UFRS/XI_29 fallback uygulanır. XI_29 şablonundaki sıfır finans satırları gerçek veri sayılmaz; faaliyet sonucu ve alacaklar için ekonomik olarak dolu satırlara fallback yapılır. Finans sektörü faaliyet sonucu, finansal alacaklar, finansal yükümlülükler, net kâr, aktif ve özkaynak trendi ayrı değerlendirilir. Sanayi tipi net marj/FAVÖK/FCF ana skora zorlanmaz.
 
 ### GYO
 
@@ -151,9 +151,9 @@ Bir analiz artifact'ında veri bulunabildiği ölçüde SEMBOL_report.html, SEMB
 - Bazı yeni/özel finansal şirketlerde tarihsel tablo sağlayıcıda bulunmayabilir; rapor PARTIAL olarak devam eder.
 - Skorlar araştırma modelidir; al/sat kararı değildir.
 
-## v1.0.1 doğrulama durumu
+## v1.0.2 doğrulama durumu
 
-v1.0.1 motoru temsili profil regresyon setini başarıyla geçmiştir. Son tam BIST denetiminde 621 benzersiz şirket ve 100/100 XU100 bileşeni kontrol edilmiş; motor seviyesinde ERROR veya CRITICAL bulgu kalmamıştır. Kalan uyarılar veri sağlayıcı farkı, ekonomik olarak anlamsız negatif çarpanlar, sınırlı tarihçe veya sağlayıcıda bulunmayan finansallar gibi veri-kalite başlıkları olarak ayrı tutulur.
+v1.0.2 motoru temsili profil regresyon setini başarıyla geçmiştir. Son tam BIST denetiminde 621 benzersiz şirket ve 100/100 XU100 bileşeni kontrol edilmiş; motor seviyesinde ERROR veya CRITICAL bulgu kalmamıştır. Kalan uyarılar veri sağlayıcı farkı, ekonomik olarak anlamsız negatif çarpanlar, sınırlı tarihçe veya sağlayıcıda bulunmayan finansallar gibi veri-kalite başlıkları olarak ayrı tutulur.
 
 
 ## Release Quality Gate
