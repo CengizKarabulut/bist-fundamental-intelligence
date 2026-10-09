@@ -210,10 +210,8 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         hs.get("ttm_net_income")
         if "ana ortakl" in profit_row.casefold() else None
     )
-    parent_equity=(
-        hs.get("equity")
-        if "ana ortakl" in equity_row.casefold() else None
-    )
+    parent_equity=hs.get("parent_equity")
+    parent_equity_row=str(selected_rows.get("parent_equity") or "")
     independent=calculate_ratios(
         market_cap_try=eng.fnum(row.get("market_cap_basic")),
         ttm_parent_profit_try=parent_profit,
@@ -313,7 +311,7 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         "quarterly_periods":hist.get("data_quality",{}).get("quarterly_periods"),
         "financial_period":hist.get("summary",{}).get("latest_period"),
         "valuation_reconciliation":vendor_reconciliation,
-        "valuation_input_rows":{"profit":profit_row,"equity":equity_row},
+        "valuation_input_rows":{"profit":profit_row,"equity":equity_row,"parent_equity":parent_equity_row},
         "reconciled_metrics":{
             key:{
                 "tradingview":eng.fnum(row.get(eng.M[key][0])),
