@@ -60,11 +60,28 @@ summary={
 }
 (OUT/"full_bist_audit_summary.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
 
+def readiness_from_audit(r):
+    """Conservative audit-only status, NOT a successfully rendered report's status."""
+    codes={x.get("code") for x in r.get("issues",[])}
+    profile=r.get("profile")
+    if r.get("status") in {"ERROR","CRITICAL"}:
+        return "REVIEW", "Motor-level failure"
+    if "HISTORY_UNAVAILABLE" in codes or "SHORT_HISTORY" in codes:
+        return "PARTIAL", "Missing or insufficient financial history"
+    if profile in {"GYO","Holding","Yatırım Ortaklığı"}:
+        return "VALUATION_PARTIAL", "Audit has no verified property/portfolio NAV evidence"
+    if r.get("status")=="WARNING":
+        return "REVIEW", "Provider/data warning requires reconciliation"
+    return "READY", "Audit checks passed; not proof of external statement reconciliation"
+
+
 rows=[]
 for r in results:
+    readiness,reason=readiness_from_audit(r)
     rows.append({
         "symbol":r.get("symbol"),"name":r.get("name"),"profile":r.get("profile"),
         "sector":r.get("sector"),"industry":r.get("industry"),"status":r.get("status"),
+        "audit_readiness_provisional":readiness,"audit_readiness_reason":reason,
         "issue_count":r.get("issue_count",0),"critical_count":r.get("critical_count",0),
         "warning_count":r.get("warning_count",0),"metric_coverage":r.get("metric_coverage"),
         "core_rows_found":r.get("core_rows_found"),"core_rows_expected":r.get("core_rows_expected"),
@@ -74,6 +91,8 @@ for r in results:
     })
 df=pd.DataFrame(rows)
 df.to_csv(OUT/"full_bist_audit.csv",index=False,encoding="utf-8-sig")
+summary["audit_readiness_provisional_counts"]=dict(Counter(df["audit_readiness_provisional"]))
+(OUT/"full_bist_audit_summary.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
 
 lines=[
     "# Tüm BIST Fundamental Intelligence Audit",
@@ -87,6 +106,9 @@ lines=[
 ]
 for k in ["ERROR","CRITICAL","WARNING","INFO","OK"]:
     lines.append(f"- {k}: **{status_counts.get(k,0)}**")
+lines += ["","## Geçici denetim hazırlığı (nihai tek-hisse raporu statüsü değildir)"]
+for k,v in sorted(summary["audit_readiness_provisional_counts"].items()):
+    lines.append(f"- {k}: {v}")
 lines += ["","## En sık hata/uyarı kodları"]
 for code,count in issue_counts.most_common(25):
     symbols=sorted(issue_symbol_sets[code])
