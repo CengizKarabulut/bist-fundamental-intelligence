@@ -25,6 +25,10 @@ def main() -> None:
     xu100 = int(data.get("xu100_count_reported", 0) or 0)
 
     failures = []
+    if sum(int(v or 0) for v in statuses.values()) != universe:
+        failures.append("Status totals do not match audited company count")
+    if reported and universe != reported:
+        failures.append(f"symbols_checked={universe} != universe_count={reported}")
     if errors:
         failures.append(f"ERROR={errors}")
     if critical:
