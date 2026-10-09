@@ -337,8 +337,29 @@ def xu100(u):
         if x:return x
     return set()
 
+# Canonical liquid/tradable representatives for explicitly identified multi-class
+# issuers. This list controls only which *ticker* represents an issuer in the
+# cross-sectional benchmark; it must not be mistaken for firm-wide market cap.
+# Without a preferred ticker in the live universe, retain the normal fallback.
+PRIMARY_SHARE_CLASS = {"ISCTR", "KRDMD"}
+
 def dedupe(df):
-    d=df.copy(); d["_e"]=d.apply(entity,axis=1); d=d.sort_values("market_cap_basic",ascending=False,na_position="last").drop_duplicates("_e"); return d.drop(columns="_e")
+    """One issuer per benchmark; prefer known primary share classes consistently.
+
+    Sorting only by vendor market capitalization can select a rare class (e.g.
+    ISBTR) instead of ISCTR and create meaningless company-level P/B statistics.
+    For other issuers, retain the previous largest-capitalization fallback.
+    """
+    d=df.copy()
+    d["_e"]=d.apply(entity,axis=1)
+    d["_primary_class"]=d["symbol"].astype(str).str.upper().isin(PRIMARY_SHARE_CLASS)
+    d=d.sort_values(
+        ["_e","_primary_class","market_cap_basic","symbol"],
+        ascending=[True,False,False,True],
+        na_position="last",
+        kind="mergesort",
+    ).drop_duplicates("_e",keep="first")
+    return d.drop(columns=["_e","_primary_class"])
 
 def vals(df,k):
     fld=M[k][0]
