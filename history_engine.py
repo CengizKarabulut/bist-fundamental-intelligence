@@ -319,23 +319,40 @@ def _pp_change(now: float | None, old: float | None) -> float | None:
     return now - old
 
 
-def _ttm(discrete: pd.Series) -> float | None:
-    if discrete is None or len(discrete.dropna()) < 4:
+def _consecutive_quarters(series: pd.Series, count: int) -> list[str] | None:
+    """Only accept actual contiguous fiscal quarters, never sparse last-N rows."""
+    if series is None or series.empty:
         return None
-    return float(discrete.dropna().iloc[-4:].sum())
+    available = {str(k) for k, v in series.items() if pd.notna(v) and _qkey(k) != (0, 0)}
+    if not available:
+        return None
+    year, quarter = max((_qkey(k) for k in available))
+    keys = []
+    for _ in range(count):
+        key = f"{year}Q{quarter}"
+        if key not in available:
+            return None
+        keys.append(key)
+        quarter -= 1
+        if quarter == 0:
+            year, quarter = year - 1, 4
+    return keys
+
+
+def _ttm(discrete: pd.Series) -> float | None:
+    keys = _consecutive_quarters(discrete, 4)
+    return float(sum(float(discrete[k]) for k in keys)) if keys else None
 
 
 def _ttm_yoy(discrete: pd.Series) -> float | None:
-    if discrete is None:
+    keys = _consecutive_quarters(discrete, 8)
+    if not keys:
         return None
-    s=discrete.dropna()
-    if len(s)<8:
+    current = sum(float(discrete[k]) for k in keys[:4])
+    previous = sum(float(discrete[k]) for k in keys[4:])
+    if previous == 0:
         return None
-    current=float(s.iloc[-4:].sum())
-    previous=float(s.iloc[-8:-4].sum())
-    if previous==0:
-        return None
-    return (current/previous-1.0)*100.0
+    return (current / previous - 1.0) * 100.0
 
 
 def _positive_count_last4(yoy_map: dict[str, float | None]) -> int | None:
@@ -357,6 +374,21 @@ def _cagr(series: pd.Series, periods: int = 3) -> float | None:
     if latest <= 0 or old <= 0:
         return None
     return ((latest / old) ** (1.0 / periods) - 1.0) * 100.0
+
+
+def _net_debt_if_complete(debt, cash, investments):
+    """Conservative statement net debt: missing balance components are unknown, not zero."""
+    if any(v is None or not math.isfinite(float(v)) for v in (debt, cash, investments)):
+        return None
+    return float(debt) - float(cash) - float(investments)
+
+
+def _average_positive_balance(current, prior):
+    """TTM returns require two valid balance observations; no last-balance substitute."""
+    if any(v is None or not math.isfinite(float(v)) for v in (current, prior)):
+        return None
+    mean = (float(current) + float(prior)) / 2.0
+    return mean if mean > 0 else None
 
 
 def _safe_ratio(a: float | None, b: float | None, mult: float = 1.0) -> float | None:
@@ -858,8 +890,9 @@ def build_historical_analysis(
         ttm_operating_profit = _ttm(operating_profit_d)
         ttm_ocf = _ttm(ocf_d)
         ttm_capex = None
-        if capex_d is not None and len(capex_d.dropna()) >= 4:
-            ttm_capex = float(capex_d.dropna().iloc[-4:].abs().sum())
+        capex_keys = _consecutive_quarters(capex_d, 4)
+        if capex_keys:
+            ttm_capex = float(sum(abs(float(capex_d[k])) for k in capex_keys))
 
         # Prefer the provider's explicit "Serbest Nakit Akım" row. If missing,
         # reconstruct FCF as operating cash flow minus absolute capex.
@@ -891,27 +924,13 @@ def build_historical_analysis(
         # İş Yatırım's company-card net debt includes other financial liabilities
         # and deducts cash/financial investments. This is materially important for
         # project-heavy GYOs such as EKGYO.
-        net_debt_now = (
-            debt_now - (cash_now or 0.0) - (fininv_now or 0.0)
-            if debt_now is not None else None
-        )
-        net_debt_old = (
-            debt_old - (cash_old or 0.0) - (fininv_old or 0.0)
-            if debt_old is not None else None
-        )
+        net_debt_now = _net_debt_if_complete(debt_now, cash_now, fininv_now)
+        net_debt_old = _net_debt_if_complete(debt_old, cash_old, fininv_old)
         current_ratio_now = _safe_ratio(ca_now, cl_now)
         current_ratio_old = _safe_ratio(ca_old, cl_old)
 
-        avg_equity_ttm=(
-            (equity_now+equity_old)/2.0
-            if equity_now is not None and equity_old is not None and (equity_now+equity_old)!=0
-            else equity_now
-        )
-        avg_assets_ttm=(
-            (assets_now+assets_old)/2.0
-            if assets_now is not None and assets_old is not None and (assets_now+assets_old)!=0
-            else assets_now
-        )
+        avg_equity_ttm = _average_positive_balance(equity_now, equity_old)
+        avg_assets_ttm = _average_positive_balance(assets_now, assets_old)
 
         # Own-history metrics. ROE/ROA use end-period balances as a
         # consistent approximation because average balances are not guaranteed
