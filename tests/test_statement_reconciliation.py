@@ -29,6 +29,14 @@ class StatementReconciliationTests(unittest.TestCase):
         self.assertIsNone(implied_parent_equity_from_vendor_pb(100,-1))
         self.assertEqual(diagnose_pb_denominator(100,-1,100,None)["classification"],"UNVERIFIABLE")
 
+    def test_subunit_pb_relative_gap(self):
+        # A 0.30 gap between P/B=0.50 and 0.80 is economically material,
+        # even though its absolute value is smaller than 0.35.
+        self.assertEqual(reconcile(0.5, 0.8), "REVIEW")
+        self.assertEqual(reconcile(0.8, 0.5), "REVIEW")
+        self.assertEqual(reconcile(0.8, 0.82), "WITHIN_TOLERANCE")
+        self.assertEqual(reconcile(0.1, 0.12), "REVIEW")
+
     def test_comparison(self):
         self.assertEqual(reconcile(10,11),"WITHIN_TOLERANCE")
         self.assertEqual(reconcile(10,25),"REVIEW")
