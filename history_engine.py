@@ -49,6 +49,13 @@ INCOME_ROWS = {
     ],
 }
 
+PARENT_EQUITY_ROWS = [
+    "Ana Ortaklığa Ait Özkaynaklar",
+    "Ana Ortaklık Paylarına Ait Özkaynaklar",
+    "Ana Ortaklığa Ait Özkaynak",
+    "Ana Ortaklık Payları",
+]
+
 BALANCE_ROWS = {
     "cash": [
         "Nakit ve Nakit Benzerleri",
@@ -838,6 +845,13 @@ def build_historical_analysis(
         if debt_rows:
             found["financial_debt"] = debt_rows
 
+        # Explicit parent equity. Consolidated total equity can include
+        # non-controlling interests and must not silently substitute for it.
+        parent_equity_series,parent_equity_row=_find_series(
+            bs_q,PARENT_EQUITY_ROWS,quarterly=True
+        )
+        if parent_equity_row:
+            found["parent_equity"]=parent_equity_row
         # Cash flow
         cashflow: dict[str, pd.Series] = {}
         if not cf_q.empty:
@@ -917,6 +931,7 @@ def build_historical_analysis(
         debt_now, debt_old = _same_quarter_year_ago(balance.get("financial_debt", pd.Series(dtype=float)))
         fininv_now, fininv_old = _same_quarter_year_ago(balance.get("financial_investments", pd.Series(dtype=float)))
         equity_now, equity_old = _same_quarter_year_ago(balance.get("equity", pd.Series(dtype=float)))
+        parent_equity_now, parent_equity_old = _same_quarter_year_ago(parent_equity_series)
         assets_now, assets_old = _same_quarter_year_ago(balance.get("total_assets", pd.Series(dtype=float)))
         ca_now, ca_old = _same_quarter_year_ago(balance.get("current_assets", pd.Series(dtype=float)))
         cl_now, cl_old = _same_quarter_year_ago(balance.get("current_liabilities", pd.Series(dtype=float)))
@@ -1008,6 +1023,8 @@ def build_historical_analysis(
             "net_debt_yoy": _pct_change(net_debt_now, net_debt_old)
                 if net_debt_old is not None and net_debt_old > 0 else None,
             "equity": equity_now,
+            "parent_equity": parent_equity_now,
+            "parent_equity_previous": parent_equity_old,
             "equity_yoy": _pct_change(equity_now, equity_old),
             "total_assets": assets_now,
             "assets_yoy": _pct_change(assets_now, assets_old),
