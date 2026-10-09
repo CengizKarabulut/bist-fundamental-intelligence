@@ -85,6 +85,7 @@ for r in results:
         "pb_vs_iy":(r.get("valuation_reconciliation") or {}).get("pb",{}).get("iy_comparison"),
         "profit_source_row":(r.get("valuation_input_rows") or {}).get("profit"),
         "equity_source_row":(r.get("valuation_input_rows") or {}).get("equity"),
+        "parent_equity_source_row":(r.get("valuation_input_rows") or {}).get("parent_equity"),
         "roe_tv":(r.get("reconciled_metrics") or {}).get("roe",{}).get("tradingview"),
         "roe_iy":(r.get("reconciled_metrics") or {}).get("roe",{}).get("is_yatirim"),
         "roe_statement":(r.get("reconciled_metrics") or {}).get("roe",{}).get("statement_derived"),
