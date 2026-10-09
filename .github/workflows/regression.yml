@@ -7,6 +7,9 @@ on:
     paths:
       - "analyze.py"
       - "history_engine.py"
+      - "statement_reconciliation.py"
+      - "audit_readiness.py"
+      - "tests/**"
       - "special_profiles.py"
       - "data/nav_inputs.csv"
       - "regression_checks.py"
