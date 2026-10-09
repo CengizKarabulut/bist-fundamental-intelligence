@@ -36,6 +36,9 @@ def main():
     assert profile({"description":"TAV Havalimanlari Holding A.S.","industry":"Other Transportation","sector":"Transportation"}) == "Genel"
     assert profile({"symbol":"TAVHL","description":"TAV Havalimanlari Holding A.S.","industry":"Other Transportation","sector":"Transportation"}) == "Genel"
     assert profile({"symbol":"SISE","description":"Turkiye Sise ve Cam Fabrikalari A.S.","industry":"Home Furnishings","sector":"Consumer Durables"}) == "Genel"
+    assert profile({"symbol":"ATSYH","description":"Atlantis Yatirim Holding A.S.","industry":"Investment Trusts/Mutual Funds","sector":"Miscellaneous"}) == "Holding"
+    assert profile({"symbol":"ISBIR","description":"Isbir Holding AS","industry":"Textiles","sector":"Process Industries"}) == "Holding"
+    assert profile({"symbol":"KERVN","description":"Kervansaray Yatirim Holding A.S.","industry":"Hotels/Resorts/Cruise lines","sector":"Consumer Services"}) == "Holding"
     assert profile({"description":"Petkim Petrokimya Holding A.S.","industry":"Chemicals: Specialty","sector":"Process Industries"}) == "Genel"
     assert profile({"description":"Deva Holding A.S.","industry":"Pharmaceuticals: Major","sector":"Health Technology"}) == "Genel"
 
