@@ -39,7 +39,7 @@ def calculate_ratios(market_cap_try=None, ttm_parent_profit_try=None,
                       "ttm_ebitda_try":ebitda}}
 
 
-def reconcile(calculated, vendor, tolerance=0.35):
+def reconcile(calculated, vendor, tolerance=0.10):
     """Classification for each vendor comparison; never auto-overwrite a ratio."""
     if calculated is None or vendor is None:
         return "UNVERIFIABLE"
@@ -49,9 +49,12 @@ def reconcile(calculated, vendor, tolerance=0.35):
         return "UNVERIFIABLE"
     if not (math.isfinite(a) and math.isfinite(b)):
         return "UNVERIFIABLE"
-    if a>0 and b>0 and abs(a-b)/max(abs(a),1.0)<=tolerance:
-        return "WITHIN_TOLERANCE"
-    return "REVIEW"
+    # Symmetric relative difference: never floor a valuation multiple at 1.
+    # Flooring at 1 hides meaningful disagreements for P/B < 1.
+    if a <= 0 or b <= 0:
+        return "REVIEW"
+    difference = abs(a-b) / max(abs(a), abs(b))
+    return "WITHIN_TOLERANCE" if difference <= tolerance else "REVIEW"
 
 
 def implied_parent_equity_from_vendor_pb(market_cap_try, vendor_pb):
