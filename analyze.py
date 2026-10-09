@@ -973,7 +973,10 @@ def overall(t,p,s,perf,history=None,validation=None,sector_code=None,sector_perf
                     f"net ücret/komisyon geliri {fmt(fee,'%')} değişti."
                 )
             if eqa is not None:
-                words.append(f"Özkaynak/aktif oranı {eqa:.1f}% seviyesinde.")
+                words.append(
+                    f"Özkaynak/aktif oranı {eqa:.1f}% seviyesinde; bu oran yalnız bilanço kaldıraç göstergesidir, "
+                    "BDDK sermaye yeterliliği oranının (SYR) yerine kullanılmaz."
+                )
         elif p in {"Sigorta","Finansal"}:
             ey=hs.get("equity_yoy")
             ay=hs.get("assets_yoy")
@@ -1225,11 +1228,14 @@ def special_profile_html(history):
             ("Özkaynak/Aktif (bilgi)",num(m.get("equity_to_assets"),"%")),
         ]
     elif prof=="Finansal":
+        labels=sp.get("metric_labels",{})
+        activity_label=labels.get("activity_result") or "Faaliyet Sonucu"
+        recv_label=labels.get("receivables") or "Alacaklar"
         pairs=[
-            ("Finans Brüt Sonuç",money(m.get("finance_gross_profit"))),
-            ("Brüt Sonuç YoY",num(m.get("finance_gross_profit_yoy"),"%")),
-            ("Finansal Alacaklar",money(m.get("finance_receivables"))),
-            ("Alacaklar YoY",num(m.get("finance_receivables_yoy"),"%")),
+            (activity_label,money(m.get("activity_result",m.get("finance_gross_profit")))),
+            (f"{activity_label} YoY",num(m.get("activity_result_yoy",m.get("finance_gross_profit_yoy")),"%")),
+            (recv_label,money(m.get("receivables",m.get("finance_receivables")))),
+            (f"{recv_label} YoY",num(m.get("receivables_yoy",m.get("finance_receivables_yoy")),"%")),
             ("Net Kâr YoY",num(m.get("net_income_yoy"),"%")),
             ("Özkaynak/Aktif",num(m.get("equity_to_assets"),"%")),
         ]
