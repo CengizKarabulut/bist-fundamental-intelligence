@@ -1,6 +1,6 @@
 # BIST Fundamental Intelligence
 
-BIST Fundamental Intelligence v1.1.0-rc1 (doğrulama adayı); bir BIST sembolünü alıp güncel piyasa/temel verileri, tarihsel mali tabloları, sektör/endüstri dağılımlarını, BIST100 karşılaştırmasını ve şirket tipine özel finansal kuralları tek bir profesyonel HTML/JSON raporunda birleştiren araştırma motorudur.
+BIST Fundamental Intelligence v1.1.0 Stable; bir BIST sembolünü alıp güncel piyasa/temel verileri, tarihsel mali tabloları, sektör/endüstri dağılımlarını, BIST100 karşılaştırmasını ve şirket tipine özel finansal kuralları tek bir profesyonel HTML/JSON raporunda birleştiren araştırma motorudur.
 
 Amaç tek bir AL/SAT puanı üretmek değildir. Şirket kalitesi, büyüme, kârlılık, finansal sağlık, nakit kalitesi, değerleme ve göreli konum ayrı tutulur.
 
@@ -15,28 +15,38 @@ Yerel kullanım:
 
 Windows'ta HISSE_ANALIZ.bat da kullanılabilir.
 
-## v1.1 aday sürüm ve kabul koşulları
+## v1.1.0 Stable — kapsam ve doğrulanmış sınırlar
 
-**v1.1.0-rc1 henüz Stable değildir.** En son doğrulanmış tam BIST
-artifact'ı, 9 Ekim 2026 tarihli #79 çalışmasıdır (621 şirket;
-ERROR=0, CRITICAL=0); bu artifact yeni FAVÖK ve pay sınıfı
-düzeltmelerinden **önce** üretildi.
+**9 Ekim 2026 Full BIST Audit #100:** 621/621 BIST şirketi, 100/100
+XU100 bileşeni, ERROR=0 ve CRITICAL=0. 8/8 audit shard'ı, otomatik
+muhasebe testleri ve release quality gate geçti. Regression Smoke Test
+#120 ayrıca başarılıdır.
 
-Aday sürümde tam audit sırasında:
-- 8/8 shard, Regression Smoke Test ve birleşik release quality gate geçmeli;
-- benzersiz şirket sayısı >=600, XU100 >=100 olmalı ve evren sayıları uyuşmalı;
-- ERROR ve CRITICAL sıfır olmalı;
-- bağımsız F/K kapsamı >=200, PD/DD kapsamı >=450 olmalı;
-- FD/FAVÖK yalnız açıklanabilir finansal tablo kaynakları ve dönem-uyumlu
-  net borç ile üretilmeli. Veri yoksa N/A meşru ve gereklidir.
-- Kaynak farkları WARNING/REVIEW olarak kalabilir; sayıları sıfırlamak için
-  muhasebe verisi uydurulmaz.
+| Denetim ölçüsü | Sonuç |
+| --- | ---: |
+| Uyarılı şirket | 160 |
+| Bilgilendirme statüsü | 221 |
+| OK | 240 |
+| Bağımsız F/K hesabı | 290 / 621 |
+| Bağımsız PD/DD hesabı | 592 / 621 |
+| Bağımsız FD/FAVÖK hesabı | **0 / 621** |
+| Finansal tablo geçmişi bulunamayan | 15 |
 
-`full_bist_audit.csv` artık bağımsız F/K, PD/DD, FD/FAVÖK; TTM FAVÖK
-kaynağı, özkaynak dayanağı ve kaynak mutabakat bilgilerini sunar.
-`full_bist_audit_summary.json` oran kapsamlarını sayar.
-`audit_readiness_provisional` ayrı bir **ön denetim statüsüdür**;
-tekil HTML raporunun nihai statüsüyle karıştırılmamalıdır.
+**FD/FAVÖK sınırı:** v1.1, mali tablolardan bağımsız FAVÖK veya
+FD/FAVÖK değerini mevcut kaynaklarla doğrulayabilmiş değildir.
+Bu ölçülerin bağımsız hesap alanı N/A kalır; varsa İş Yatırım/
+TradingView'den alınan sağlayıcı FD/FAVÖK oranı kaynak belirtilerek
+gösterilebilir. Sağlayıcı oranı, bağımsız hesaplama gibi sunulmaz.
+Bu eksik kapsam geliştirme hedefi olarak v1.2'ye bırakılmıştır.
+
+**Veri otoritesi:** Finansal tabloda açık dayanak bulunamayan kalem
+sıfır sayılmaz. Uyarı veya REVIEW durumları otomatik düzeltilmez.
+`READY`, otomatik denetimde geçici hazırlık seviyesidir; kapsamlı
+KAP doğrulaması veya yatırım kararı onayı değildir.
+
+**Sürüm kararı:** Bu sürüm, doğrulanmış sınırlamalarla analiz raporu
+üreten *operasyonel kararlı sürüm*dür; her şirket oranının bağımsız
+hesaplanmış ve denetlenmiş olduğu anlamına gelmez.
 
 ## Veri otoritesi
 
