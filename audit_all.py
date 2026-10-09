@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 
 import analyze as eng
-from statement_reconciliation import calculate_ratios, reconcile
+from statement_reconciliation import calculate_ratios, reconcile, diagnose_pb_denominator
 from history_engine import build_historical_analysis
 
 OUT = Path("audit_results")
@@ -220,6 +220,12 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         # Do not substitute operating profit for EBITDA.
         ttm_ebitda_try=None,
     )
+    pb_basis_diagnostic=diagnose_pb_denominator(
+        eng.fnum(row.get("market_cap_basic")),
+        eng.fnum(row.get("iy_pb")),
+        consolidated_equity_try=hs.get("equity"),
+        parent_equity_try=hs.get("parent_equity"),
+    )
     vendor_reconciliation={
         key:{
             "calculated":independent[key],
@@ -311,6 +317,8 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         "quarterly_periods":hist.get("data_quality",{}).get("quarterly_periods"),
         "financial_period":hist.get("summary",{}).get("latest_period"),
         "valuation_reconciliation":vendor_reconciliation,
+        "pb_basis_diagnostic":pb_basis_diagnostic,
+        "valuation_timestamp_status":"PRICE_AND_VENDOR_RATIO_ASOF_NOT_IN_AUDIT",
         "valuation_input_rows":{"profit":profit_row,"equity":equity_row,"parent_equity":parent_equity_row},
         "reconciled_metrics":{
             key:{
