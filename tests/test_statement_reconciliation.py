@@ -1,5 +1,5 @@
 import unittest
-from statement_reconciliation import calculate_ratios, reconcile, diagnose_pb_denominator, implied_parent_equity_from_vendor_pb, pb_basis_needs_review
+from statement_reconciliation import calculate_ratios, reconcile, diagnose_pb_denominator, implied_parent_equity_from_vendor_pb, pb_basis_needs_review, extreme_calculated_multiple
 
 class StatementReconciliationTests(unittest.TestCase):
     def test_independent_pe_pb_ev(self):
@@ -41,6 +41,13 @@ class StatementReconciliationTests(unittest.TestCase):
         self.assertEqual(reconcile(0.8, 0.5), "REVIEW")
         self.assertEqual(reconcile(0.8, 0.82), "WITHIN_TOLERANCE")
         self.assertEqual(reconcile(0.1, 0.12), "REVIEW")
+
+    def test_extreme_independent_multiple_detection(self):
+        self.assertTrue(extreme_calculated_multiple("pb",658184.65))
+        self.assertFalse(extreme_calculated_multiple("pb",0.76))
+        self.assertFalse(extreme_calculated_multiple("pb",None))
+        self.assertTrue(extreme_calculated_multiple("pe",1200))
+        self.assertFalse(extreme_calculated_multiple("pe",90))
 
     def test_comparison(self):
         self.assertEqual(reconcile(10,11),"WITHIN_TOLERANCE")
