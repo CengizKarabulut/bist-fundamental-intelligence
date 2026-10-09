@@ -105,3 +105,18 @@ def pb_basis_needs_review(diagnostic, threshold=0.10):
         return gap is not None and math.isfinite(float(gap)) and float(gap)>threshold
     except (TypeError,ValueError):
         return False
+
+
+def extreme_calculated_multiple(metric, value):
+    """Review flag for implausible independently calculated multiples.
+
+    This detects potential share-class/market-cap/date/unit issues. It does not
+    imply a mathematically invalid financial statement or a scoring error.
+    """
+    bounds={"pe":1000.0, "pb":100.0, "ev":300.0}
+    if metric not in bounds or value is None:
+        return False
+    try:
+        return math.isfinite(float(value)) and float(value)>bounds[metric]
+    except (TypeError,ValueError):
+        return False
