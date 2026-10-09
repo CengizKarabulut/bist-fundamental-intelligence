@@ -42,6 +42,8 @@ jobs:
         run: pip install -r requirements.txt
       - name: Sözdizimi kontrolü
         run: python -m py_compile analyze.py history_engine.py special_profiles.py audit_all.py audit_merge.py
+      - name: Muhasebe ve audit statü testleri
+        run: python -m unittest discover -s tests -p "test_*.py" -v
       - name: Tüm BIST shard audit
         run: python audit_all.py --shard-index ${{ matrix.shard }} --shard-count 8 --quarterly 8 --symbol-timeout 45
       - name: Shard sonucunu yükle
@@ -72,6 +74,8 @@ jobs:
           pattern: bist-audit-shard-*
           path: audit_downloads
           merge-multiple: false
+      - name: Audit hazırlık statüsü modülünü doğrula
+        run: python -m py_compile audit_readiness.py audit_merge.py
       - name: Sonuçları birleştir
         run: python audit_merge.py
       - name: Release quality gate
