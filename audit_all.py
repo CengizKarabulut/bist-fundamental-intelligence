@@ -11,6 +11,7 @@ from pathlib import Path
 import pandas as pd
 
 import analyze as eng
+from statement_reconciliation import calculate_ratios, reconcile
 from history_engine import build_historical_analysis
 
 OUT = Path("audit_results")
@@ -198,6 +199,40 @@ def audit_symbol(row, universe_df, xu100_set, qn):
             if gap > .25:
                 add_issue(issues,"WARNING","NET_DEBT_SOURCE_GAP",f"{gap*100:.1f}%")
 
+    # 3b) Independent statement arithmetic. A ratio is only computed if
+    # the necessary accounting period, ownership basis and inputs are explicit.
+    hs=hist.get("summary",{}) or {}
+    selected_rows=hist.get("rows_found",{}) or {}
+    profit_row=str(selected_rows.get("net_income") or "")
+    equity_row=str(selected_rows.get("equity") or "")
+    # Parent-company earnings and equity must be demonstrably attributable.
+    parent_profit=(
+        hs.get("ttm_net_income")
+        if "ana ortakl" in profit_row.casefold() else None
+    )
+    parent_equity=(
+        hs.get("equity")
+        if "ana ortakl" in equity_row.casefold() else None
+    )
+    independent=calculate_ratios(
+        market_cap_try=eng.fnum(row.get("market_cap_basic")),
+        ttm_parent_profit_try=parent_profit,
+        parent_equity_try=parent_equity,
+        net_debt_try=hs.get("net_debt_statement"),
+        # Do not substitute operating profit for EBITDA.
+        ttm_ebitda_try=None,
+    )
+    vendor_reconciliation={
+        key:{
+            "calculated":independent[key],
+            "tradingview":eng.fnum(row.get(eng.M[key][0])),
+            "is_yatirim":eng.fnum(row.get(iykey)),
+            "tv_comparison":reconcile(independent[key],eng.fnum(row.get(eng.M[key][0]))),
+            "iy_comparison":reconcile(independent[key],eng.fnum(row.get(iykey))),
+        }
+        for key,iykey in (("pe","iy_pe"),("pb","iy_pb"),("ev","iy_ev_ebitda"))
+    }
+
     # 4) Provider cross-section conflicts / suspicious ranges.
     for key,iy_col in {
         "pe":"iy_pe","pb":"iy_pb","ev":"iy_ev_ebitda","roe":"iy_roe","roa":"iy_roa"
@@ -277,6 +312,8 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         "core_rows_expected":hist.get("data_quality",{}).get("core_rows_expected"),
         "quarterly_periods":hist.get("data_quality",{}).get("quarterly_periods"),
         "financial_period":hist.get("summary",{}).get("latest_period"),
+        "valuation_reconciliation":vendor_reconciliation,
+        "valuation_input_rows":{"profit":profit_row,"equity":equity_row},
         "reconciled_metrics":{
             key:{
                 "tradingview":eng.fnum(row.get(eng.M[key][0])),
