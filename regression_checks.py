@@ -129,6 +129,8 @@ def main():
 
     gl_sp=glbmd["historical_analysis"].get("special_profile_analysis",{})
     assert gl_sp.get("status")=="FINANCIAL_ENGINE", gl_sp
+    assert gl_sp.get("metrics",{}).get("activity_result") not in (None,0), gl_sp
+    assert gl_sp.get("metrics",{}).get("receivables") not in (None,0), gl_sp
     gchecks={x["label"]:x for x in glbmd["source_validation"]["checks"]}
     assert gchecks["Cari FD/FAVÖK"]["status"] == "PROFİLDE SKOR DIŞI", gchecks["Cari FD/FAVÖK"]
 
