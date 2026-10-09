@@ -152,6 +152,14 @@ def main():
         assert r["metrics"]["netm"]["app"] is False, (r["symbol"],r["metrics"]["netm"])
     # Insurance equity/assets is informative, not a solvency-capital score.
     assert ages["metrics"]["eq_assets"]["app"] is False, ages["metrics"]["eq_assets"]
+    assert "solvency oranının yerine kullanılmadı" in " ".join(
+        ages["historical_analysis"]["commentary"].get("watch",[])
+    )
+    assert not any(
+        x.startswith("Özkaynak/aktif oranı")
+        for x in ages["historical_analysis"]["commentary"].get("risks",[])
+    )
+    assert "tarihsel finansal teyit içermez" in isfin["overall"].lower()
 
     # GYO: classic industrial valuation multiples must not create a valuation score.
     assert ekg["scores"]["valuation"] is None, ekg["scores"]["valuation"]
