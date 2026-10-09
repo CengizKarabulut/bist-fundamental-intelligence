@@ -373,6 +373,30 @@ def _ttm_yoy(discrete: pd.Series) -> float | None:
     return (current / previous - 1.0) * 100.0
 
 
+def _statement_ebitda_ttm(ebitda_discrete: pd.Series,
+                          operating_discrete: pd.Series,
+                          depreciation_discrete: pd.Series,
+                          statement_quarter: tuple[int,int],
+                          profile: str) -> tuple[float | None, str]:
+    """Estimate EBITDA only with exact four-quarter source/period alignment.
+
+    A source's explicit EBITDA row wins. EBIT + depreciation is labeled as
+    reconstructed (not a provider audited/standardized figure).
+    """
+    if profile in {"Banka","Sigorta","Finansal","Holding","Yatırım Ortaklığı","GYO"}:
+        return None,"NOT_APPLICABLE"
+    exact = _consecutive_quarters(ebitda_discrete,4)
+    if exact and _qkey(exact[0])==statement_quarter:
+        return _ttm(ebitda_discrete),"EXPLICIT_INCOME_STATEMENT"
+    op=_consecutive_quarters(operating_discrete,4)
+    dep=_consecutive_quarters(depreciation_discrete,4)
+    if op and dep and op==dep and _qkey(op[0])==statement_quarter:
+        val=(sum(float(operating_discrete[k]) for k in op)
+             + sum(abs(float(depreciation_discrete[k])) for k in dep))
+        return float(val),"RECONSTRUCTED_OPERATING_PROFIT_PLUS_DA"
+    return None,"UNAVAILABLE"
+
+
 def _positive_count_last4(yoy_map: dict[str, float | None]) -> int | None:
     vals = [v for _, v in sorted(yoy_map.items(), key=lambda kv: _qkey(kv[0]), reverse=True) if v is not None][:4]
     return sum(v > 0 for v in vals) if vals else None
@@ -835,7 +859,8 @@ def build_historical_analysis(
         # Income statement
         income: dict[str, pd.Series] = {}
         for key, candidates in INCOME_ROWS.items():
-            s, row = _find_series(inc_q, candidates, quarterly=True)
+            excludes = ["marj","oran","buyume","degisim"] if key == "ebitda" else None
+            s, row = _find_series(inc_q, candidates, quarterly=True, excludes=excludes)
             income[key] = s
             if row:
                 found[key] = row
@@ -928,32 +953,15 @@ def build_historical_analysis(
         ttm_ni = _ttm(net_income_d)
         ttm_gross_profit = _ttm(gross_profit_d)
         ttm_operating_profit = _ttm(operating_profit_d)
-        # Prefer an explicit FAVÖK line in the same statement. Otherwise EBIT
-        # plus depreciation/amortization is only a reconstructed approximation.
-        # Both reconstructed components must span the SAME four quarters.
-        ttm_ebitda = None
-        ebitda_source = "UNAVAILABLE"
+        # Never mix EBITDA inputs from mismatched reporting quarters.
         latest_statement_quarter = max(
             (_qkey(k) for k in net_income.index if _qkey(k)!=(0,0)),
             default=(0,0),
         )
-        ebitda_keys = _consecutive_quarters(ebitda_d,4)
-        op_keys = _consecutive_quarters(operating_profit_d,4)
-        dep_keys = _consecutive_quarters(depreciation_d,4)
-        def ends_on_statement_period(keys):
-            return bool(keys and _qkey(keys[0]) == latest_statement_quarter)
-        if profile not in {"Banka","Sigorta","Finansal","Holding","Yatırım Ortaklığı","GYO"}:
-            if ends_on_statement_period(ebitda_keys):
-                ttm_ebitda = _ttm(ebitda_d)
-                ebitda_source = "EXPLICIT_INCOME_STATEMENT"
-            elif (ends_on_statement_period(op_keys)
-                  and ends_on_statement_period(dep_keys)
-                  and op_keys == dep_keys):
-                ttm_ebitda = (
-                    float(sum(float(operating_profit_d[k]) for k in op_keys))
-                    + float(sum(abs(float(depreciation_d[k])) for k in dep_keys))
-                )
-                ebitda_source = "RECONSTRUCTED_OPERATING_PROFIT_PLUS_DA"
+        ttm_ebitda,ebitda_source = _statement_ebitda_ttm(
+            ebitda_d,operating_profit_d,depreciation_d,
+            latest_statement_quarter,profile,
+        )
         ttm_ocf = _ttm(ocf_d)
         ttm_capex = None
         capex_keys = _consecutive_quarters(capex_d, 4)
