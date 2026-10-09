@@ -86,6 +86,12 @@ for r in results:
         "profit_source_row":(r.get("valuation_input_rows") or {}).get("profit"),
         "equity_source_row":(r.get("valuation_input_rows") or {}).get("equity"),
         "parent_equity_source_row":(r.get("valuation_input_rows") or {}).get("parent_equity"),
+        "pb_vendor_implied_equity":(r.get("pb_basis_diagnostic") or {}).get("vendor_implied_equity_try"),
+        "pb_vs_total_equity_gap":(r.get("pb_basis_diagnostic") or {}).get("total_equity_gap_fraction"),
+        "pb_vs_parent_equity_gap":(r.get("pb_basis_diagnostic") or {}).get("parent_equity_gap_fraction"),
+        "pb_denominator_diagnostic":(r.get("pb_basis_diagnostic") or {}).get("classification"),
+        "valuation_timestamp_status":r.get("valuation_timestamp_status"),
+
         "roe_tv":(r.get("reconciled_metrics") or {}).get("roe",{}).get("tradingview"),
         "roe_iy":(r.get("reconciled_metrics") or {}).get("roe",{}).get("is_yatirim"),
         "roe_statement":(r.get("reconciled_metrics") or {}).get("roe",{}).get("statement_derived"),
