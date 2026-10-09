@@ -83,6 +83,22 @@ jobs:
         run: python audit_merge.py
       - name: Release quality gate
         run: python quality_gate.py --summary audit_summary/full_bist_audit_summary.json
+      - name: Denetim sonucunu Actions özetinde göster
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## BIST Fundamental Intelligence — Release Gate"
+            echo ""
+            echo "Commit: \`$GITHUB_SHA\`"
+            echo ""
+            if [ -f audit_summary/full_bist_audit.md ]; then
+              cat audit_summary/full_bist_audit.md
+            else
+              echo "Tam audit özeti oluşturulamadı. Shard ve merge adımlarını inceleyin."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Full audit raporunu yükle
         if: always()
         uses: actions/upload-artifact@v4
