@@ -82,6 +82,20 @@ def _latest(s: pd.Series):
     return _num(s[idx])
 
 
+def _series_has_signal(s: pd.Series | None) -> bool:
+    """True when a row contains at least one economically non-zero observation.
+
+    Generic XI_29 templates can contain finance-sector placeholder rows filled
+    entirely with zeros. Those rows are structural placeholders, not real data.
+    """
+    if s is None or s.empty:
+        return False
+    vals=pd.to_numeric(s,errors="coerce").dropna().astype(float)
+    if vals.empty:
+        return False
+    return bool((vals.abs()>1e-9).any())
+
+
 def _yoy_latest(s: pd.Series):
     if s is None or s.empty:
         return None
@@ -195,38 +209,86 @@ def build_special_profile_analysis(
         return out
 
     if profile=="Finansal":
-        fg,fg_row=_best_series(inc_q,[
+        activity,activity_row=_best_series(inc_q,[
             "Finans Sektörü Faaliyetlerinden Brüt Kar (Zarar)",
             "Faiz, Ücret, Prim, Komisyon ve Diğer Gelirler",
         ])
+        activity_basis="Finans sektörü faaliyet sonucu"
+        if not _series_has_signal(activity):
+            activity,activity_row=_best_series(inc_q,[
+                "Net Faaliyet Kar/Zararı",
+                "Net Faaliyet Karı/Zararı",
+                "Finansman Gideri Öncesi Faaliyet Karı/Zararı",
+                "Esas Faaliyet Karı (Zararı)",
+                "Faaliyet Karı (Zararı)",
+            ])
+            activity_basis="Faaliyet sonucu"
+
         recv,recv_row=_best_series(bs_q,[
             "Finans Sektörü Faaliyetlerinden Alacaklar",
             "Finansal Kiralama Alacakları",
         ])
+        recv_basis="Finans sektörü alacakları"
+        if not _series_has_signal(recv):
+            recv,recv_row=_best_series(bs_q,[
+                "Ticari Alacaklar",
+                "Diğer Alacaklar",
+            ])
+            recv_basis="Faaliyet/ticari alacaklar"
+
         liab,liab_row=_best_series(bs_q,[
             "Finans Sektörü Faaliyetlerinden Borçlar",
             "Finansal Borçlar",
         ])
-        out["rows_found"]={"finance_gross_profit":fg_row,"finance_receivables":recv_row,"finance_liabilities":liab_row}
+        liab_basis="Finans sektörü yükümlülükleri"
+        if not _series_has_signal(liab):
+            liab,liab_row=_best_series(bs_q,[
+                "Finansal Borçlar",
+                "Diğer Finansal Yükümlülükler",
+                "Ticari Borçlar",
+            ])
+            liab_basis="Finansal/faaliyet yükümlülükleri"
+
+        out["rows_found"]={
+            "activity_result":activity_row,
+            "receivables":recv_row,
+            "liabilities":liab_row,
+        }
+        out["metric_labels"]={
+            "activity_result":activity_basis,
+            "receivables":recv_basis,
+            "liabilities":liab_basis,
+        }
         out["metrics"]={
-            "finance_gross_profit":_latest(fg),
-            "finance_gross_profit_yoy":_yoy_latest(fg),
-            "finance_receivables":_latest(recv),
-            "finance_receivables_yoy":_yoy_latest(recv),
-            "finance_liabilities":_latest(liab),
-            "finance_liabilities_yoy":_yoy_latest(liab),
+            "activity_result":_latest(activity) if _series_has_signal(activity) else None,
+            "activity_result_yoy":_yoy_latest(activity) if _series_has_signal(activity) else None,
+            "receivables":_latest(recv) if _series_has_signal(recv) else None,
+            "receivables_yoy":_yoy_latest(recv) if _series_has_signal(recv) else None,
+            "liabilities":_latest(liab) if _series_has_signal(liab) else None,
+            "liabilities_yoy":_yoy_latest(liab) if _series_has_signal(liab) else None,
+            # Backward-compatible aliases.
+            "finance_gross_profit":_latest(activity) if _series_has_signal(activity) else None,
+            "finance_gross_profit_yoy":_yoy_latest(activity) if _series_has_signal(activity) else None,
+            "finance_receivables":_latest(recv) if _series_has_signal(recv) else None,
+            "finance_receivables_yoy":_yoy_latest(recv) if _series_has_signal(recv) else None,
+            "finance_liabilities":_latest(liab) if _series_has_signal(liab) else None,
+            "finance_liabilities_yoy":_yoy_latest(liab) if _series_has_signal(liab) else None,
             "net_income_yoy":summary.get("net_income_yoy"),
             "equity_yoy":summary.get("equity_yoy"),
             "equity_to_assets":summary.get("equity_to_assets"),
         }
         out["status"]="FINANCIAL_ENGINE"
-        if out["metrics"]["finance_gross_profit_yoy"] is not None:
+        if out["metrics"]["activity_result_yoy"] is not None:
             out["commentary"].append(
-                f"Finans sektörü brüt faaliyet sonucu yıllık %{out['metrics']['finance_gross_profit_yoy']:.1f} değişti."
+                f"{activity_basis} yıllık %{out['metrics']['activity_result_yoy']:.1f} değişti."
             )
-        if out["metrics"]["finance_receivables_yoy"] is not None:
+        if out["metrics"]["receivables_yoy"] is not None:
             out["commentary"].append(
-                f"Finans sektörü alacakları yıllık %{out['metrics']['finance_receivables_yoy']:.1f} değişti."
+                f"{recv_basis} yıllık %{out['metrics']['receivables_yoy']:.1f} değişti."
+            )
+        if activity_row and activity_basis=="Faaliyet sonucu":
+            out["commentary"].append(
+                "Finans sektörü UFRS satırları sıfır şablon değer taşıdığı için XI_29 faaliyet sonucu fallback'i kullanıldı."
             )
         out["commentary"].append(
             "Sanayi tipi FAVÖK, FCF ve net borç/FAVÖK metrikleri ana skora zorlanmadı."
