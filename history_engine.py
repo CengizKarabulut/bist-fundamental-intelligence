@@ -29,6 +29,11 @@ INCOME_ROWS = {
         "DÖNEM KARI (ZARARI)", "SÜRDÜRÜLEN FAALİYETLER DÖNEM KARI",
         "XXIII. NET DÖNEM KARI/ZARARI (XVII+XXII)",
     ],
+    "total_net_income": [
+        "Net Dönem Karı", "Net Dönem Kârı", "Dönem Net Kar",
+        "DÖNEM KARI (ZARARI)", "NET DÖNEM KARI (ZARARI)",
+        "XXIII. NET DÖNEM KARI/ZARARI (XVII+XXII)",
+    ],
     "depreciation": [
         "Amortisman Giderleri", "Amortisman ve İtfa Giderleri",
         "Amortisman ve Tükenme Payları",
@@ -74,6 +79,7 @@ BALANCE_ROWS = {
         "I. NAKİT DEĞERLER VE MERKEZ BANKASI",
     ],
     "current_assets": ["Dönen Varlıklar"],
+    "inventories": ["Stoklar", "Stoklar, Net"],
     "current_liabilities": ["Kısa Vadeli Yükümlülükler"],
     "total_assets": ["Toplam Varlıklar", "TOPLAM AKTİFLER", "Toplam Aktifler", "AKTİF TOPLAMI"],
     "equity": [
@@ -859,7 +865,9 @@ def build_historical_analysis(
         # Income statement
         income: dict[str, pd.Series] = {}
         for key, candidates in INCOME_ROWS.items():
-            excludes = ["marj","oran","buyume","degisim"] if key == "ebitda" else None
+            excludes = (["marj","oran","buyume","degisim"] if key == "ebitda"
+                        else ["ana ortakl","kontrol gucu olmayan"] if key == "total_net_income"
+                        else None)
             s, row = _find_series(inc_q, candidates, quarterly=True, excludes=excludes)
             # "FAVÖK (%)" may normalize to the same label as FAVÖK; do
             # not mistake a percentage for a monetary amount.
@@ -948,6 +956,7 @@ def build_historical_analysis(
         # Discrete quarters for TTM flow calculation.
         revenue_d = _discrete_from_ytd(revenue)
         net_income_d = _discrete_from_ytd(net_income)
+        total_net_income_d = _discrete_from_ytd(income["total_net_income"])
         gross_profit_d = _discrete_from_ytd(gross_profit)
         operating_profit_d = _discrete_from_ytd(operating_profit)
         ebitda_d = _discrete_from_ytd(income["ebitda"])
@@ -958,6 +967,7 @@ def build_historical_analysis(
 
         ttm_rev = _ttm(revenue_d)
         ttm_ni = _ttm(net_income_d)
+        ttm_total_ni = _ttm(total_net_income_d)
         ttm_gross_profit = _ttm(gross_profit_d)
         ttm_operating_profit = _ttm(operating_profit_d)
         # Never mix EBITDA inputs from mismatched reporting quarters.
@@ -1003,6 +1013,7 @@ def build_historical_analysis(
         fininv_now, fininv_old = _same_quarter_year_ago(balance.get("financial_investments", pd.Series(dtype=float)))
         equity_now, equity_old = _same_quarter_year_ago(balance.get("equity", pd.Series(dtype=float)))
         parent_equity_now, parent_equity_old = _same_quarter_year_ago(parent_equity_series)
+        inventories_now, _ = _same_quarter_year_ago(balance.get("inventories",pd.Series(dtype=float)))
         assets_now, assets_old = _same_quarter_year_ago(balance.get("total_assets", pd.Series(dtype=float)))
         ca_now, ca_old = _same_quarter_year_ago(balance.get("current_assets", pd.Series(dtype=float)))
         cl_now, cl_old = _same_quarter_year_ago(balance.get("current_liabilities", pd.Series(dtype=float)))
@@ -1028,6 +1039,7 @@ def build_historical_analysis(
         current_ratio_old = _safe_ratio(ca_old, cl_old)
 
         avg_equity_ttm = _average_positive_balance(equity_now, equity_old)
+        avg_parent_equity_ttm = _average_positive_balance(parent_equity_now, parent_equity_old)
         avg_assets_ttm = _average_positive_balance(assets_now, assets_old)
 
         # Own-history metrics. ROE/ROA use end-period balances as a
@@ -1078,6 +1090,9 @@ def build_historical_analysis(
             "annual_self_history": annual_history,
             "ttm_revenue": ttm_rev,
             "ttm_net_income": ttm_ni,
+            "ttm_total_net_income": ttm_total_ni,
+            "avg_parent_equity_ttm": avg_parent_equity_ttm,
+            "avg_assets_ttm": avg_assets_ttm,
             "ttm_ebitda": ttm_ebitda,
             "ttm_ebitda_source": ebitda_source,
             "ttm_ebitda_reporting_period": latest_period if ttm_ebitda is not None else None,
@@ -1095,6 +1110,9 @@ def build_historical_analysis(
             "capex_to_ocf": _safe_ratio(ttm_capex, ttm_ocf) if ttm_ocf is not None and ttm_ocf > 0 else None,
             "fcf_margin": _safe_ratio(ttm_fcf, ttm_rev, 100.0),
             "cash": cash_now,
+            "inventories": inventories_now,
+            "current_assets": ca_now,
+            "current_liabilities": cl_now,
             "cash_yoy": _pct_change(cash_now, cash_old),
             "financial_debt": debt_now,
             "financial_debt_yoy": _pct_change(debt_now, debt_old),
@@ -1117,6 +1135,23 @@ def build_historical_analysis(
             "assets_yoy": _pct_change(assets_now, assets_old),
             "current_ratio": current_ratio_now,
             "current_ratio_yoy_change": _pp_change(current_ratio_now, current_ratio_old),
+            "balance_input_periods": {
+                key: (str(series.index[-1]) if not series.empty else None)
+                for key,series in {
+                    **balance,
+                    "parent_equity":parent_equity_series,
+                }.items()
+            },
+            "flow_input_periods": {
+                key: (str(series.index[-1]) if not series.empty else None)
+                for key,series in {
+                    "net_income":net_income_d,
+                    "total_net_income":total_net_income_d,
+                    "revenue":revenue_d,
+                    "free_cash_flow":fcf_d,
+                    "operating_cash_flow":ocf_d,
+                }.items()
+            },
         }
 
         # Bank-specific operating / balance growth metrics.
