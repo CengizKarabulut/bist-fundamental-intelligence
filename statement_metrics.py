@@ -186,7 +186,7 @@ def derive_statement_ratios(history: dict[str,Any] | None,
     ni_growth=_number(hs.get("net_income_ttm_yoy")) if flow("net_income","ttm_net_income") is not None else None
     ratios["rev_g"]=record("rev_g",rev_growth,
         "100 * (TTM revenue / preceding TTM revenue - 1)",
-        {"ttm_revenue":revenue,"basis":"8 contiguous quarters"},applicable=industrial)
+        {"ttm_revenue":revenue,"basis":"8 contiguous quarters"},applicable=nonfinancial)
     ratios["ni_g"]=record("ni_g",ni_growth,
         "100 * (TTM net profit / preceding TTM net profit - 1)",
         {"ttm_net_profit":flow("net_income","ttm_net_income"),
