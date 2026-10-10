@@ -8,6 +8,8 @@ from pathlib import Path
 import pandas as pd
 from audit_readiness import readiness_from_audit
 from statement_metrics import STANDARD_KEYS
+from statement_peers import make_snapshot, export_metadata
+from version import __version__
 
 ROOT=Path("audit_downloads")
 OUT=Path("audit_summary")
@@ -91,6 +93,7 @@ for r in results:
         "core_rows_found":r.get("core_rows_found"),"core_rows_expected":r.get("core_rows_expected"),
         "quarterly_periods":r.get("quarterly_periods"),
         "financial_period":r.get("financial_period"),
+        "is_xu100":r.get("is_xu100", False),
         "pe_calculated":(r.get("valuation_reconciliation") or {}).get("pe",{}).get("calculated"),
         "pb_calculated":(r.get("valuation_reconciliation") or {}).get("pb",{}).get("calculated"),
         "ev_ebitda_calculated":(r.get("valuation_reconciliation") or {}).get("ev",{}).get("calculated"),
@@ -131,6 +134,11 @@ for r in results:
         rows[-1][f"statement_{factor}_status"]=entry.get("status","UNAVAILABLE")
 df=pd.DataFrame(rows)
 df.to_csv(OUT/"full_bist_audit.csv",index=False,encoding="utf-8-sig")
+# Independent peer snapshot is produced only from this complete, unified
+# financial-statement audit. The workflow publishes it only after gate PASS.
+peer_snapshot=make_snapshot(df,engine_version=__version__)
+peer_snapshot.to_csv(OUT/"statement_peer_snapshot.csv",index=False,encoding="utf-8")
+summary["statement_peer_snapshot"]=export_metadata(peer_snapshot)
 summary["audit_readiness_provisional_counts"]=dict(Counter(df["audit_readiness_provisional"]))
 (OUT/"full_bist_audit_summary.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
 
@@ -155,6 +163,11 @@ for k,v in summary["independent_valuation_coverage"].items():
 lines += ["","## Bağımsız finansal gösterge kapsaması (18 standart oran)"]
 for k,v in summary["independent_factor_coverage"].items():
     lines.append(f"- {k}: {v} / {len(results)}")
+lines += ["","## Standart bilanço oranlarıyla sektör emsal veri kümesi",
+          f"- Kaynak: {summary['statement_peer_snapshot']['symbols']} şirket, bağımsız finansal tablo hesaplamaları",
+          f"- Model: {__version__}",
+          "- Hazır İş Yatırım/TradingView çarpanları emsal medyanlarına katılmaz.",
+          "- Güncel finansal dönem ve as-of filtreleri tek-hisse raporunda uygulanır."]
 lines += ["","## EBITDA kaynak durumu"]
 for k,v in sorted(summary["ebitda_source_counts"].items()):
     lines.append(f"- {k}: {v}")
