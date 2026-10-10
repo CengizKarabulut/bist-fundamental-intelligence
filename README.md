@@ -1,6 +1,6 @@
 # BIST Fundamental Intelligence
 
-BIST Fundamental Intelligence v1.1.0 Stable; bir BIST sembolünü alıp güncel piyasa/temel verileri, tarihsel mali tabloları, sektör/endüstri dağılımlarını, BIST100 karşılaştırmasını ve şirket tipine özel finansal kuralları tek bir profesyonel HTML/JSON raporunda birleştiren araştırma motorudur.
+BIST Fundamental Intelligence v1.2.0-rc1 (statement-first aday sürüm); bir BIST sembolünü alıp güncel piyasa/temel verileri, tarihsel mali tabloları, sektör/endüstri dağılımlarını, BIST100 karşılaştırmasını ve şirket tipine özel finansal kuralları tek bir profesyonel HTML/JSON raporunda birleştiren araştırma motorudur.
 
 Amaç tek bir AL/SAT puanı üretmek değildir. Şirket kalitesi, büyüme, kârlılık, finansal sağlık, nakit kalitesi, değerleme ve göreli konum ayrı tutulur.
 
@@ -14,6 +14,46 @@ Yerel kullanım:
     python analyze.py ASELS
 
 Windows'ta HISSE_ANALIZ.bat da kullanılabilir.
+
+## v1.2.0-rc1 — Finansal tablodan standart oran hesaplama
+
+Bu sürümde, şirketin hazır İş Yatırım/TradingView/EkoFin çarpanlarını
+seçmek **ana yöntem değildir**. Otomatik iş akışı BorsaPy üzerinden
+İş Yatırım finansal tablo verilerini alır; `history_engine.py`
+satırları ve dönemleri normalize eder; `statement_metrics.py` aynı
+formülleri tek hisse HTML/JSON raporu ve tüm BIST denetiminde kullanır.
+
+- 18 standart faktör için sonuç + formül + ham girdiler + dönem + muhasebe
+  kaynak bilgisi otomatik kaydedilir.
+- F/K son 12 aylık açıkça **ana ortaklığa ait** kârı ve anlık piyasa
+  değerini; PD/DD ana ortaklığa ait özkaynağı kullanır.
+- ROE için TTM ana ortaklık kârı / ortalama ana ortaklık özkaynağı; ROA
+  için TTM konsolide dönem net kârı / ortalama toplam varlık hesaplanır.
+- Standart likidite, sermaye, borç, marj ve büyüme oranları yalnızca
+  gereken finansal tablo satırları ve uyumlu dönemler varsa hesaplanır.
+- Finansal kuruluşlar, GYO ve holdingler için geçersiz sanayi
+  çarpanları zorlanmaz; eksik satırlar **N/A** olur.
+- Bağımsız FD/FAVÖK, tam firma değeri (azınlık payı, kira vb.)
+  uzlaştırılmadığı için yalnız *indicative/proxy* olarak açıklanabilir;
+  hesaplanamıyorsa N/A'dır.
+- İş Yatırım, TradingView ve EkoFin değerleri *doğruluk hakemi* değil,
+  varsa ayrı karşılaştırma referanslarıdır. EkoFin canlı erişimi henüz
+  bu repoda yoktur.
+- **Şu anki indirme hattı doğrudan KAP XBRL/API entegrasyonu değildir.**
+  Mali tablolar BorsaPy/İş Yatırım aracılığıyla temin edilir.
+  Girdi ve hesaplanan oranların denetim izi audit JSON artifact'ında
+  saklanır; ham bilanço belgelerinin Git deposuna her çalışmada commit
+  edilmesi uygulanmaz.
+- Piyasa değeri hâlâ TradingView ekranındaki güncel fiyat girdisidir;
+  bunun veri zamanı sağlanmadığında bilinmiyor olarak işaretlenir.
+- BIST sektör/endüstri medyanları şu anda sağlayıcı bazlı olduğundan,
+  kendi hesapladığımız 18 oranın birebir muhasebe bazlı sektör medyanı
+  gibi gösterilmemelidir. Bunun için sonraki adımda denetimden çıkan
+  `statement_*` sütunlarının karşılaştırma veri seti olarak kullanılması gerekir.
+
+**Aday sürüm sınırlaması:** İlk 621 şirketlik denetim ve 8 şirketlik
+regresyon tamamlanana kadar bu sürümün hesaplama kapsamı/kalitesi
+doğrulanmış sayılmaz. v1.1.0 kabul raporu v1.2'nin garantisi değildir.
 
 ## v1.1.0 Stable — kapsam ve doğrulanmış sınırlar
 
