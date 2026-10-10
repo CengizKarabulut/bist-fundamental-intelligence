@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.0-rc1 — 2026-10-10 (Statement-first / TEST BEKLİYOR)
+
+- 18 standart finansal oran için tek `statement_metrics.py` hesap motoru.
+- BorsaPy/İş Yatırım finansal tablolarından kaynak satırı, TTM
+  sürekliliği, muhasebe dönemi ve ana ortaklık/konsolide ayrımı.
+- Tek hisse HTML/JSON raporu: kullanıcının kendi hesaplanan finansal oranı
+  ana alandır; mevcut TradingView/İş Yatırım oranları karşılaştırma
+  referansıdır. Girdi yetersizse N/A; provider-fallback yok.
+- Tüm BIST: her 18 oran, eksiklik durumu ve hesap girdileri şirket bazlı
+  audit çıktılarına aktarılır; sonuçları daha sonra emsal medyanı yapmak
+  için ayrı `statement_*` CSV sütunları açılır.
+- Muhasebe testleri: ebeveyn kazancı, konsolide kâr, tarih, negatif
+  kâr, banka profili ve eksik bilanço durumu.
+- **Henüz 621/621 tam audit ve regresyon başarıları görülmedi.**
+  v1.1.0 Stable son onaylı sürümdür; v1.2.0-rc1 henüz değildir.
+
+
 ## 1.1.0 — 2026-10-10 (STABLE; sınırlı bağımsız oran kapsamı)
 
 - **Full BIST Audit #100 doğrulandı:** 621/621 BIST, 100/100 XU100,
