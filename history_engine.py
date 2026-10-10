@@ -1091,6 +1091,8 @@ def build_historical_analysis(
             "assets_cagr_3y": _cagr(annual_assets, 3),
             "annual_self_history": annual_history,
             "ttm_revenue": ttm_rev,
+            "ttm_gross_profit": ttm_gross_profit,
+            "ttm_operating_profit": ttm_operating_profit,
             "ttm_net_income": ttm_ni,
             "ttm_total_net_income": ttm_total_ni,
             "avg_parent_equity_ttm": avg_parent_equity_ttm,
