@@ -332,6 +332,27 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         "financial_period":hist.get("summary",{}).get("latest_period"),
         "valuation_reconciliation":vendor_reconciliation,
         "statement_calculated_metrics":statement_factors,
+        "statement_input_snapshot":{
+            "financial_period":hs.get("latest_period"),
+            "financial_schema":hist.get("financial_group_used"),
+            "row_mapping":selected_rows,
+            "input_amounts":{
+                key:hs.get(key) for key in (
+                    "ttm_net_income","ttm_total_net_income","ttm_revenue",
+                    "ttm_gross_profit","ttm_operating_profit","ttm_ebitda",
+                    "ttm_free_cash_flow","parent_equity","equity",
+                    "avg_parent_equity_ttm","avg_assets_ttm","total_assets",
+                    "current_assets","current_liabilities","inventories",
+                    "financial_debt","cash","financial_investments",
+                    "net_debt_statement",
+                )
+            },
+            "balance_input_periods":hs.get("balance_input_periods"),
+            "flow_input_periods":hs.get("flow_input_periods"),
+            "market_cap_snapshot_try":eng.fnum(row.get("market_cap_basic")),
+            "market_cap_provider":"TradingView screener",
+            "price_asof":"UNKNOWN_FROM_SOURCE",
+        },
         "ebitda_statement_source":hs.get("ttm_ebitda_source","UNAVAILABLE"),
         "ev_accounting_basis":"INDICATIVE_MARKET_CAP_PLUS_STATEMENT_NET_DEBT",
         "ev_limitations":"Minority interest, leasing, preferred equity and other EV adjustments not independently reconciled",
