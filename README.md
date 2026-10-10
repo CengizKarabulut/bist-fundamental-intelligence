@@ -70,9 +70,15 @@ doğrulanmış sayılmaz. v1.1.0 kabul raporu v1.2'nin garantisi değildir.
 MKK'nın <https://apiportal.mkk.com.tr/> portalında hesap açılması,
 hesabın onaylanması, API anahtarı oluşturulması ve yetkili **finansal
 tablo veri ürününün** bulunup abonelik/erişim şartlarının kontrol
-edilmesi gerekir. API portalının genel kullanımının ücretsiz olduğu
-duyurulmuştur; özel veri servisinin fiyatı veya erişim hakkı bu
-bilgiden otomatik olarak çıkarılamaz.
+edilmesi gerekir. MKK'nın resmî "KAP Rest API entegrasyonu" kılavuzu,
+veri yayın servisinin üretimde kullanılabilmesi için **Borsa İstanbul
+veri dağıtım sözleşmesi**, MKK tarafından yetkilendirme, bildirilen
+IP'lere izin ve abonelere sağlanan API KEY şartlarını açıklar.
+API Portal kullanıcı hesabının ücretsiz olması, KAP veri yayın
+servisinin sözleşmesiz ve ücretsiz kullanılabildiği anlamına gelmez.
+Bu sebeple bu projede **ücretsiz mod varsayılan** kalır:
+finansal tablolar BorsaPy/İş Yatırım üzerinden indirilip bizim
+formüllerimizle hesaplanır; KAP adaptörü yetkili erişim yoksa kapalıdır.
 
 API ürünü gerçek finansal tabloları kapsıyorsa GitHub deposunda
 **Settings → Secrets and variables → Actions** üzerinden iki secret
