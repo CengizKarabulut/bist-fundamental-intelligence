@@ -512,9 +512,14 @@ def _apply_independent_statement_factors(a,p,g,statement_ratios):
         x["abs"]=abs_score(value,band(key,p)) if x["scoreable"] else None
         for gn in ("industry","sector","xu100","bist"):
             if gn in x.get("groups",{}):
-                x["groups"][gn]["pct"]=(
-                    pct(g[gn],key,value) if x.get("app") and valid and gn in g else None
-                )
+                # We cannot compare our canonical statement ratio against
+                # a provider-defined ratio whose debt/earnings/book basis may
+                # differ. Re-enable percentiles only with the all-statement
+                # benchmark dataset from the audited 621-stock CSV.
+                x["groups"][gn]["median"]=None
+                x["groups"][gn]["pct"]=None
+                x["groups"][gn]["n"]=0
+                x["groups"][gn]["basis"]="STATEMENT_PEER_DATA_PENDING"
     return a
 
 
