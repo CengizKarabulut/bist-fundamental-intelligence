@@ -38,6 +38,10 @@ jobs:
         shard: [0,1,2,3,4,5,6,7]
     permissions:
       contents: read
+    env:
+      KAP_API_KEY: ${{ secrets.KAP_API_KEY }}
+      KAP_API_FINANCIALS_URL_TEMPLATE: ${{ secrets.KAP_API_FINANCIALS_URL_TEMPLATE }}
+      KAP_API_KEY_HEADER: ${{ vars.KAP_API_KEY_HEADER || 'X-API-Key' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
