@@ -317,6 +317,7 @@ def audit_symbol(row, universe_df, xu100_set, qn):
     return {
         "symbol":sym,
         "name":str(row.get("description") or row.get("name") or ""),
+        "is_xu100":sym in xu100_set,
         "profile":profile,
         "sector":str(row.get("sector") or ""),
         "industry":str(row.get("industry") or ""),
