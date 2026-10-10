@@ -10,6 +10,7 @@ from typing import Any
 import pandas as pd
 import borsapy as bp
 from special_profiles import build_special_profile_analysis
+from kap_financials import configured_official_kap_ticker
 
 
 INCOME_ROWS = {
@@ -766,6 +767,16 @@ def build_historical_analysis(
             "dividend_yield": info.get("dividendYield"),
         }
 
+        # Official MKK/KAP API is used ONLY when an authorized, documented
+        # financial-data product endpoint and key are configured. Never
+        # silently mix partial KAP statements with İş Yatırım statements.
+        official_kap= configured_official_kap_ticker(symbol)
+        statement_stock=official_kap if official_kap is not None else stock
+        result["statement_origin"]=(
+            "OFFICIAL_KAP_AUTHENTICATED_API"
+            if official_kap is not None else "BORSAPY_IS_YATIRIM"
+        )
+        result["source"]=result["statement_origin"]
         # İş Yatırım exposes two statement schemas. Banks, insurers and
         # non-bank financial institutions are generally reported in UFRS; some
         # symbols/providers can still be available only in XI_29. Try the
@@ -781,13 +792,13 @@ def build_historical_analysis(
         for candidate in group_candidates:
             try:
                 bs_try=_retry_call(
-                    lambda candidate=candidate: stock.get_balance_sheet(
+                    lambda candidate=candidate: statement_stock.get_balance_sheet(
                         quarterly=True, financial_group=candidate, last_n=qn
                     ),
                     attempts=2, base_delay=0.7,
                 )
                 inc_try=_retry_call(
-                    lambda candidate=candidate: stock.get_income_stmt(
+                    lambda candidate=candidate: statement_stock.get_income_stmt(
                         quarterly=True, financial_group=candidate, last_n=qn
                     ),
                     attempts=2, base_delay=0.7,
@@ -815,7 +826,7 @@ def build_historical_analysis(
         if annual_periods and annual_periods > 0:
             try:
                 inc_a = _retry_call(
-                    lambda: stock.get_income_stmt(
+                    lambda: statement_stock.get_income_stmt(
                         quarterly=False,
                         financial_group=group,
                         last_n=max(4,int(annual_periods)),
@@ -826,7 +837,7 @@ def build_historical_analysis(
                 inc_a = pd.DataFrame()
             try:
                 bs_a = _retry_call(
-                    lambda: stock.get_balance_sheet(
+                    lambda: statement_stock.get_balance_sheet(
                         quarterly=False,
                         financial_group=group,
                         last_n=max(4,int(annual_periods)),
@@ -842,7 +853,7 @@ def build_historical_analysis(
         if group=="XI_29" and profile not in financial_profiles:
             try:
                 cf_q = _retry_call(
-                    lambda: stock.get_cashflow(
+                    lambda: statement_stock.get_cashflow(
                         quarterly=True, financial_group=group, last_n=qn
                     ),
                     attempts=2, base_delay=0.7,
