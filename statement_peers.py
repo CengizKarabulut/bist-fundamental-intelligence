@@ -60,6 +60,12 @@ def make_snapshot(audit_df, *, engine_version, created_at=None):
         )
         if key in MULTIPLES:
             valid &= value.gt(0)
+        # Economically unsuitable ratios from a NONPOSITIVE parent capital
+        # base must not skew ROE/capital medians, although the company's raw
+        # ratio remains available in the standalone audit report.
+        if key in {"roe","pb","de","eq_assets"} and "statement_eq_assets" in source:
+            equity_asset_ratio=pd.to_numeric(source["statement_eq_assets"],errors="coerce")
+            valid &= ~(equity_asset_ratio.notna() & equity_asset_ratio.le(0))
         result[col] = value.where(valid)
     result["is_xu100"] = result["is_xu100"].astype(str).str.lower().isin(["true", "1"])
     result["snapshot_version"] = str(engine_version)
