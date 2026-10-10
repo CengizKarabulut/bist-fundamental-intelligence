@@ -57,7 +57,8 @@ def derive_statement_ratios(history: dict[str,Any] | None,
     industrial=profile not in NOT_INDUSTRIAL
     nonfinancial=profile not in FINANCIAL_MODELS
     group=history.get("financial_group_used")
-    source=f"borsapy/Is Yatirim financial statements ({group or 'unknown schema'})"
+    statement_origin=history.get("statement_origin") or "BORSAPY_IS_YATIRIM"
+    source=f"{statement_origin} financial statements ({group or 'unknown schema'})"
 
     def balance(key):
         return _number(hs.get(key)) if period and balances.get(key)==period else None
