@@ -46,10 +46,12 @@ formülleri tek hisse HTML/JSON raporu ve tüm BIST denetiminde kullanır.
   edilmesi uygulanmaz.
 - Piyasa değeri hâlâ TradingView ekranındaki güncel fiyat girdisidir;
   bunun veri zamanı sağlanmadığında bilinmiyor olarak işaretlenir.
-- BIST sektör/endüstri medyanları şu anda sağlayıcı bazlı olduğundan,
-  kendi hesapladığımız 18 oranın birebir muhasebe bazlı sektör medyanı
-  gibi gösterilmemelidir. Bunun için sonraki adımda denetimden çıkan
-  `statement_*` sütunlarının karşılaştırma veri seti olarak kullanılması gerekir.
+- BIST sektör/endüstri medyanları halen sağlayıcı bazlı olduğundan,
+  kendi hesapladığımız 18 oran için bu medyan ve yüzdelik sıralama
+  şimdilik **N/A** bırakılır. Bir sonraki adım, tam denetimin ürettiği
+  `statement_*` sütunlarıyla kendi muhasebe-bazlı sektör medyanlarımızı
+  oluşturmaktır. Standart oranı farklı tanımdaki kaynak medyanıyla
+  karşılaştırıp gerçeğe aykırı sıralama üretilmez.
 
 **Aday sürüm sınırlaması:** İlk 621 şirketlik denetim ve 8 şirketlik
 regresyon tamamlanana kadar bu sürümün hesaplama kapsamı/kalitesi
