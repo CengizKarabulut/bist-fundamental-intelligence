@@ -134,20 +134,18 @@ def main():
     gchecks={x["label"]:x for x in glbmd["source_validation"]["checks"]}
     assert gchecks["Cari FD/FAVÖK"]["status"] == "PROFİLDE SKOR DIŞI", gchecks["Cari FD/FAVÖK"]
 
-    # Statement-derived target metrics must override generic provider TTM
-    # values when İş Yatırım financial statements can reconstruct them.
-    assert ekg["metrics"]["rev_g"]["source"] == "İş Yatırım Mali Tablo (TTM)"
-    assert near(
-        ekg["metrics"]["rev_g"]["v"],
-        ekg["historical_analysis"]["summary"]["revenue_ttm_yoy"],
-        rel=0.001,
-    )
-    assert glbmd["metrics"]["ni_g"]["source"] == "İş Yatırım Mali Tablo (TTM)"
-    assert near(
-        glbmd["metrics"]["ni_g"]["v"],
-        glbmd["historical_analysis"]["summary"]["net_income_ttm_yoy"],
-        rel=0.001,
-    )
+    # Standard ratios must come only from the documented statement engine,
+    # never from a provider-computed financial multiple.
+    for report in (ase,akb,albrk,ekg,kchol,ages,glbmd,isfin):
+        for factor in ("pe","pb","roe","roa","curr","rev_g","ni_g"):
+            metric=report["metrics"][factor]
+            assert "statement_derivation" in metric, (report["symbol"],factor)
+            expected=metric["statement_derivation"]["value"]
+            assert metric["v"]==expected, (report["symbol"],factor,metric)
+            if expected is None:
+                assert metric["scoreable"] is False, (report["symbol"],factor)
+            else:
+                assert metric["source"]=="Bağımsız bilanço hesaplaması", (report["symbol"],factor)
 
     # Financial institutions must not use industrial net-margin scoring.
     for r in (akb,albrk,ages,glbmd,isfin):
@@ -172,11 +170,14 @@ def main():
     assert ekg["metrics"]["pe"]["scoreable"] is False
     assert ekg["metrics"]["fcfm"]["scoreable"] is False
 
-    # İş Yatırım realised company-card values have priority for GYO.
-    assert ekg["metrics"]["pb"]["source"] == "İş Yatırım"
-    assert near(ekg["metrics"]["pb"]["v"], 0.5, rel=0.15)
+    # GYO does not receive generic industrial valuation scores, and any
+    # displayed parent-equity book ratio is our own statement calculation.
+    assert ekg["metrics"]["pb"]["statement_derivation"]["formula"].startswith("Market capitalization")
+    assert ekg["metrics"]["pb"]["source"] in {
+        "Bağımsız bilanço hesaplaması", "Bilanço verisi yetersiz (N/A)"
+    }
     assert ekg["metrics"]["ev"]["v"] is None
-    assert "A/D" in ekg["metrics"]["ev"]["source"]
+    assert ekg["metrics"]["ev"]["statement_derivation"]["status"]=="NOT_APPLICABLE"
 
     # Net debt derived from statements must reconcile to İş Yatırım company card.
     h = ekg["historical_analysis"]["summary"]
