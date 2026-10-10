@@ -30,6 +30,7 @@ INCOME_ROWS = {
         "XXIII. NET DÖNEM KARI/ZARARI (XVII+XXII)",
     ],
     "total_net_income": [
+        "Konsolide Net Dönem Karı", "Konsolide Net Dönem Karı (Zararı)",
         "Net Dönem Karı", "Net Dönem Kârı", "Dönem Net Kar",
         "DÖNEM KARI (ZARARI)", "NET DÖNEM KARI (ZARARI)",
         "XXIII. NET DÖNEM KARI/ZARARI (XVII+XXII)",
@@ -875,6 +876,13 @@ def build_historical_analysis(
                 "%" in row or "yuzde" in _norm(row)
                 or "margin" in _norm(row)
             ):
+                s, row = pd.Series(dtype=float), None
+            # In an IFRS statement the continuing/discontinued operations
+            # sub-totals are NOT the consolidated period result. Exact-name
+            # verification prevents falsely labeling them as total net profit.
+            if key == "total_net_income" and row and _norm(row) not in {
+                _norm(x) for x in INCOME_ROWS["total_net_income"]
+            }:
                 s, row = pd.Series(dtype=float), None
             income[key] = s
             if row:
