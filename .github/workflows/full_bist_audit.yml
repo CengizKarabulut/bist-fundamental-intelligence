@@ -104,6 +104,7 @@ jobs:
             echo "Emsal verisinde değişiklik yok."
           else
             git commit -m "Refresh statement-based BIST peer medians [skip ci]"
+            git pull --rebase origin main
             git push origin HEAD:main
           fi
       - name: Denetim sonucunu Actions özetinde göster
