@@ -502,16 +502,19 @@ def _apply_independent_statement_factors(a,p,g,statement_ratios):
         x["v"]=value
         x["statement_derivation"]=item
         x["source"]=("Bağımsız bilanço hesaplaması"
-                     if value is not None else "Bilanço verisi yetersiz (N/A)")
+                     if value is not None else
+                     "Profilde uygulanmaz" if item["status"]=="NOT_APPLICABLE"
+                     else "Bilanço verisi yetersiz (N/A)")
         valid=(value is not None and
                (economically_valid(key,value) if key in {"pe","pb","ev","pfcf"} else True))
         x["economic_valid"]=valid
         x["scoreable"]=bool(scoreable(key,p) and valid)
         x["abs"]=abs_score(value,band(key,p)) if x["scoreable"] else None
         for gn in ("industry","sector","xu100","bist"):
-            x["groups"][gn]["pct"]=(
-                pct(g[gn],key,value) if x.get("app") and valid else None
-            )
+            if gn in x.get("groups",{}):
+                x["groups"][gn]["pct"]=(
+                    pct(g[gn],key,value) if x.get("app") and valid and gn in g else None
+                )
     return a
 
 
