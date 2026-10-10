@@ -11,7 +11,8 @@ from pathlib import Path
 import pandas as pd
 
 import analyze as eng
-from statement_reconciliation import calculate_ratios, reconcile, diagnose_pb_denominator, pb_basis_needs_review, extreme_calculated_multiple
+from statement_reconciliation import reconcile, diagnose_pb_denominator, pb_basis_needs_review, extreme_calculated_multiple
+from statement_metrics import derive_statement_ratios, STANDARD_KEYS
 from history_engine import build_historical_analysis
 
 OUT = Path("audit_results")
@@ -74,7 +75,7 @@ def audit_symbol(row, universe_df, xu100_set, qn):
     try:
         g=eng.groups(universe_df,row,xu100_set,profile)
         metrics=eng.analyze(row,profile,g)
-        metrics=eng.apply_profile_primary_source(metrics,profile,hist,g)
+        metrics=eng.apply_profile_primary_source(metrics,profile,hist,g,market_cap_try=eng.fnum(row.get("market_cap_basic")))
         scores=eng.scores(metrics,profile)
     except Exception as exc:
         add_issue(issues,"ERROR","ENGINE_EXCEPTION",f"{type(exc).__name__}: {exc}")
@@ -212,19 +213,10 @@ def audit_symbol(row, universe_df, xu100_set, qn):
     )
     parent_equity=hs.get("parent_equity")
     parent_equity_row=str(selected_rows.get("parent_equity") or "")
-    independent=calculate_ratios(
-        market_cap_try=eng.fnum(row.get("market_cap_basic")),
-        ttm_parent_profit_try=parent_profit,
-        parent_equity_try=parent_equity,
-        net_debt_try=(
-            hs.get("net_debt_statement")
-            if hs.get("net_debt_statement_period_aligned",False)
-            else None
-        ),
-        # EBITDA from exact dated statement line, or labeled EBIT + D&A proxy.
-        # Never infer it from a vendor's EV/EBITDA multiple.
-        ttm_ebitda_try=hs.get("ttm_ebitda"),
+    statement_factors=derive_statement_ratios(
+        hist,eng.fnum(row.get("market_cap_basic")),profile
     )
+    independent={k:statement_factors[k]["value"] for k in ("pe","pb","ev")}
     pb_basis_diagnostic=diagnose_pb_denominator(
         eng.fnum(row.get("market_cap_basic")),
         eng.fnum(row.get("iy_pb")),
@@ -339,6 +331,7 @@ def audit_symbol(row, universe_df, xu100_set, qn):
         "quarterly_periods":hist.get("data_quality",{}).get("quarterly_periods"),
         "financial_period":hist.get("summary",{}).get("latest_period"),
         "valuation_reconciliation":vendor_reconciliation,
+        "statement_calculated_metrics":statement_factors,
         "ebitda_statement_source":hs.get("ttm_ebitda_source","UNAVAILABLE"),
         "ev_accounting_basis":"INDICATIVE_MARKET_CAP_PLUS_STATEMENT_NET_DEBT",
         "ev_limitations":"Minority interest, leasing, preferred equity and other EV adjustments not independently reconciled",
