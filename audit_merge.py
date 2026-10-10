@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 from audit_readiness import readiness_from_audit
+from statement_metrics import STANDARD_KEYS
 
 ROOT=Path("audit_downloads")
 OUT=Path("audit_summary")
@@ -57,6 +58,10 @@ summary={
             if (r.get("valuation_reconciliation") or {}).get(key,{}).get("calculated") is not None
         )
         for key in ("pe","pb","ev")
+    },
+    "independent_factor_coverage":{
+        key:sum(1 for r in results if (r.get("statement_calculated_metrics") or {}).get(key,{}).get("value") is not None)
+        for key in STANDARD_KEYS
     },
     "ebitda_source_counts":dict(Counter(
         (r.get("ebitda_statement_source") or "UNAVAILABLE") for r in results
@@ -120,6 +125,10 @@ for r in results:
         "issue_codes":";".join(sorted({x.get("code","") for x in r.get("issues",[])})),
         "issues":" | ".join(f"{x.get('severity')}:{x.get('code')}:{x.get('detail')}" for x in r.get("issues",[])),
     })
+    for factor in STANDARD_KEYS:
+        entry=(r.get("statement_calculated_metrics") or {}).get(factor,{})
+        rows[-1][f"statement_{factor}"]=entry.get("value")
+        rows[-1][f"statement_{factor}_status"]=entry.get("status","UNAVAILABLE")
 df=pd.DataFrame(rows)
 df.to_csv(OUT/"full_bist_audit.csv",index=False,encoding="utf-8-sig")
 summary["audit_readiness_provisional_counts"]=dict(Counter(df["audit_readiness_provisional"]))
@@ -143,6 +152,9 @@ for k,v in sorted(summary["audit_readiness_provisional_counts"].items()):
 lines += ["","## Bağımsız değerleme kapsaması (raporlanan oranlar yerine bağımsız hesap)"]
 for k,v in summary["independent_valuation_coverage"].items():
     lines.append(f"- {k.upper()}: {v} / {len(results)}")
+lines += ["","## Bağımsız finansal gösterge kapsaması (18 standart oran)"]
+for k,v in summary["independent_factor_coverage"].items():
+    lines.append(f"- {k}: {v} / {len(results)}")
 lines += ["","## EBITDA kaynak durumu"]
 for k,v in sorted(summary["ebitda_source_counts"].items()):
     lines.append(f"- {k}: {v}")
