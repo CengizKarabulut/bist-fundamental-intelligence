@@ -8,6 +8,7 @@ on:
       - "analyze.py"
       - "history_engine.py"
       - "statement_reconciliation.py"
+      - "statement_metrics.py"
       - "audit_readiness.py"
       - "tests/**"
       - "special_profiles.py"
@@ -44,7 +45,7 @@ jobs:
       - name: Bağımlılıkları kur
         run: pip install -r requirements.txt
       - name: Sözdizimi kontrolü
-        run: python -m py_compile analyze.py history_engine.py special_profiles.py audit_all.py audit_merge.py
+        run: python -m py_compile statement_metrics.py analyze.py history_engine.py special_profiles.py audit_all.py audit_merge.py
       - name: Muhasebe ve audit statü testleri
         run: python -m unittest discover -s tests -p "test_*.py" -v
       - name: Tüm BIST shard audit
