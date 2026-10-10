@@ -11,6 +11,7 @@ import yfinance as yf
 import borsapy as bp
 from tradingview_screener import Query, col
 from history_engine import build_historical_analysis
+from statement_metrics import derive_statement_ratios, STANDARD_KEYS
 from version import __version__, ENGINE_NAME, ENGINE_STAGE
 
 ROOT = Path(__file__).resolve().parent
@@ -484,10 +485,42 @@ def enrich_target_from_history(t,history):
     return t
 
 
-def apply_profile_primary_source(a,p,history,g):
+def _apply_independent_statement_factors(a,p,g,statement_ratios):
+    """Use our statement arithmetic for the selected stock, not vendor ratios.
+
+    Provider ratios remain separately retrievable via the source validation
+    report; they never fill a missing accounting denominator in the score.
+    Cross-section percentiles still use their labelled provider-derived
+    distribution until an all-statement benchmark cache is available.
+    """
+    for key in STANDARD_KEYS:
+        if key not in a: continue
+        item=statement_ratios[key]
+        x=a[key]
+        value=item["value"]
+        x["provider_reference"]={"value":x.get("v"),"source":x.get("source")}
+        x["v"]=value
+        x["statement_derivation"]=item
+        x["source"]=("Bağımsız bilanço hesaplaması"
+                     if value is not None else "Bilanço verisi yetersiz (N/A)")
+        valid=(value is not None and
+               (economically_valid(key,value) if key in {"pe","pb","ev","pfcf"} else True))
+        x["economic_valid"]=valid
+        x["scoreable"]=bool(scoreable(key,p) and valid)
+        x["abs"]=abs_score(value,band(key,p)) if x["scoreable"] else None
+        for gn in ("industry","sector","xu100","bist"):
+            x["groups"][gn]["pct"]=(
+                pct(g[gn],key,value) if x.get("app") and valid else None
+            )
+    return a
+
+
+def apply_profile_primary_source(a,p,history,g,market_cap_try=None):
     """Apply profile-specific primary sources and accounting sanity guards."""
     if not history or history.get("error"):
-        return a
+        return _apply_independent_statement_factors(
+            a,p,g,derive_statement_ratios(history,market_cap_try,p)
+        )
 
     # GYO realised valuation: İş Yatırım company-card data takes priority.
     if p=="GYO" and history.get("market_source_available",False):
@@ -551,7 +584,9 @@ def apply_profile_primary_source(a,p,history,g):
                 a[k]["abs"]=None
                 a[k]["score_exclusion_reason"]="Negatif/sıfır özkaynak nedeniyle oran normal kalite puanına alınmadı."
 
-    return a
+    return _apply_independent_statement_factors(
+        a,p,g,derive_statement_ratios(history,market_cap_try,p)
+    )
 
 def _quality_weights(profile):
     """Category weights by business model.
@@ -1520,7 +1555,7 @@ def main():
     t=h.iloc[0].copy(); t["symbol"]=sym; p=profile(t)
     print("[2/11] BIST100 üyeleri alınıyor..."); xs=xu100(u)
     print("[3/11] BorsaPy/KAP ve 12 çeyreklik mali tablolar analiz ediliyor..."); REPORTS.mkdir(exist_ok=True); hist=build_historical_analysis(sym,p,REPORTS); t=enrich_target_from_history(t,hist)
-    print("[4/11] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs,p); an=analyze(t,p,g); an=apply_profile_primary_source(an,p,hist,g); sc=scores(an,p)
+    print("[4/11] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs,p); an=analyze(t,p,g); an=apply_profile_primary_source(an,p,hist,g,market_cap_try=fnum(t.get("market_cap_basic"))); sc=scores(an,p)
     print("[5/11] Her faktör yorumlanıyor..."); cm={k:factor_comment(v,p) for k,v in an.items()}
     print("[6/11] XU100 ve sektör endeksi performansı..."); ip=index_perf(); secidx=sector_index_code(t,p); sip=bist_index_perf(secidx)
     print("[7/11] Tarihsel büyüme, marj, nakit ve bilanço trendleri birleştiriliyor...")
