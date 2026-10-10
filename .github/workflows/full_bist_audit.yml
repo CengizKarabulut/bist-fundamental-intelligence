@@ -51,7 +51,7 @@ jobs:
       - name: Muhasebe ve audit statü testleri
         run: python -m unittest discover -s tests -p "test_*.py" -v
       - name: Tüm BIST shard audit
-        run: python audit_all.py --shard-index ${{ matrix.shard }} --shard-count 8 --quarterly 8 --symbol-timeout 45
+        run: python audit_all.py --shard-index ${{ matrix.shard }} --shard-count 8 --quarterly 12 --symbol-timeout 60
       - name: Shard sonucunu yükle
         uses: actions/upload-artifact@v4
         with:
