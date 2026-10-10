@@ -12,6 +12,7 @@ import borsapy as bp
 from tradingview_screener import Query, col
 from history_engine import build_historical_analysis
 from statement_metrics import derive_statement_ratios, STANDARD_KEYS
+from statement_peers import read_snapshot, peer_distributions
 from version import __version__, ENGINE_NAME, ENGINE_STAGE
 
 ROOT = Path(__file__).resolve().parent
@@ -521,6 +522,33 @@ def _apply_independent_statement_factors(a,p,g,statement_ratios):
                 x["groups"][gn]["n"]=0
                 x["groups"][gn]["basis"]="STATEMENT_PEER_DATA_PENDING"
     return a
+
+
+def apply_statement_peer_benchmarks(metrics, target, history, profile):
+    """Use the last quality-gated audit snapshot, never vendor-screener ratios."""
+    peers=read_snapshot(engine_version=__version__)
+    if peers is None:
+        return metrics
+    target_period=(history.get("summary") or {}).get("latest_period")
+    stats=peer_distributions(
+        peers,
+        symbol=target.get("symbol"),
+        sector=target.get("sector"),
+        industry=target.get("industry"),
+        profile=profile,
+        quarter=target_period,
+        metrics={k:metrics.get(k,{}).get("v") for k in STANDARD_KEYS},
+        directions={k:M[k][3] for k in STANDARD_KEYS},
+        min_n=3,
+        max_quarter_lag=2,
+    )
+    for key in STANDARD_KEYS:
+        if key not in metrics or key not in stats:
+            continue
+        for gn,details in stats[key].items():
+            if gn in metrics[key].get("groups",{}):
+                metrics[key]["groups"][gn]=details
+    return metrics
 
 
 def apply_profile_primary_source(a,p,history,g,market_cap_try=None):
@@ -1563,7 +1591,7 @@ def main():
     t=h.iloc[0].copy(); t["symbol"]=sym; p=profile(t)
     print("[2/11] BIST100 üyeleri alınıyor..."); xs=xu100(u)
     print("[3/11] BorsaPy/KAP ve 12 çeyreklik mali tablolar analiz ediliyor..."); REPORTS.mkdir(exist_ok=True); hist=build_historical_analysis(sym,p,REPORTS); t=enrich_target_from_history(t,hist)
-    print("[4/11] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs,p); an=analyze(t,p,g); an=apply_profile_primary_source(an,p,hist,g,market_cap_try=fnum(t.get("market_cap_basic"))); sc=scores(an,p)
+    print("[4/11] Tüm sektör / endüstri / BIST karşılaştırmaları..."); g=groups(u,t,xs,p); an=analyze(t,p,g); an=apply_profile_primary_source(an,p,hist,g,market_cap_try=fnum(t.get("market_cap_basic"))); an=apply_statement_peer_benchmarks(an,t,hist,p); sc=scores(an,p)
     print("[5/11] Her faktör yorumlanıyor..."); cm={k:factor_comment(v,p) for k,v in an.items()}
     print("[6/11] XU100 ve sektör endeksi performansı..."); ip=index_perf(); secidx=sector_index_code(t,p); sip=bist_index_perf(secidx)
     print("[7/11] Tarihsel büyüme, marj, nakit ve bilanço trendleri birleştiriliyor...")
