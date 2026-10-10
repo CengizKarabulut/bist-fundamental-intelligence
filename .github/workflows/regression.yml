@@ -9,6 +9,8 @@ on:
       - "history_engine.py"
       - "statement_reconciliation.py"
       - "statement_metrics.py"
+      - "kap_financials.py"
+      - "statement_peers.py"
       - "audit_readiness.py"
       - "tests/**"
       - "special_profiles.py"
@@ -44,7 +46,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Python sözdizimi kontrolü
-        run: python -m py_compile statement_metrics.py analyze.py history_engine.py special_profiles.py regression_checks.py version.py
+        run: python -m py_compile kap_financials.py statement_peers.py statement_metrics.py analyze.py history_engine.py special_profiles.py regression_checks.py version.py
 
       - name: Muhasebe hesaplama güvenlik testleri
         run: python -m unittest discover -s tests -p "test_*.py" -v
