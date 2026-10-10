@@ -32,6 +32,10 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+    env:
+      KAP_API_KEY: ${{ secrets.KAP_API_KEY }}
+      KAP_API_FINANCIALS_URL_TEMPLATE: ${{ secrets.KAP_API_FINANCIALS_URL_TEMPLATE }}
+      KAP_API_KEY_HEADER: ${{ vars.KAP_API_KEY_HEADER || 'X-API-Key' }}
     steps:
       - name: Repository'yi al
         uses: actions/checkout@v4
