@@ -2,6 +2,27 @@
 
 ## 1.2.0-rc1 — 2026-10-10 (Statement-first / TEST BEKLİYOR)
 
+### KAP erişim katmanı ve bağımsız emsal karşılaştırmaları
+
+- `kap_financials.py`: yalnız HTTPS resmi MKK/KAP API adreslerini
+  kabul eden kimlik doğrulamalı isteğe bağlı istemci. Para birimi,
+  ölçek, hisse ve bilanço döneminin açık doğrulanması zorunlu.
+  Yetkili API ürünü ve gerçek cevap şeması olmadan otomatik KAP
+  bağlantısının üretimde çalıştığı iddia edilmez.
+- `history_engine.py`: tam KAP seti sağlanıyorsa onunla çalışır;
+  yoksa mevcut BorsaPy/İş Yatırım hattını korur; kaynaklar karıştırılmaz.
+- `statement_peers.py`: bütün BIST için bağımsız hesaplanan
+  oranların sektör, endüstri, BIST100 ve BIST genelinde gerçek
+  medyan ve yüzdelik dağılımını kurar. En az üç emsal, en fazla
+  iki çeyrek fark, en fazla on günlük snapshot koşulları.
+- Quality Gate başarılı olduktan sonra `statement_peer_snapshot.csv`
+  otomatik `data/` dizinine yayımlanır; eksik snapshot durumunda
+  sağlayıcı oranları sessizce yedek yapılmaz.
+- Gerçekleşmiş ilk canlı tam denetim ve MKK yetkili API ürününün
+  uçtan uca bağlantısı **henüz doğrulanmamıştır**; sürüm adayıdır.
+
+
+
 - 18 standart finansal oran için tek `statement_metrics.py` hesap motoru.
 - BorsaPy/İş Yatırım finansal tablolarından kaynak satırı, TTM
   sürekliliği, muhasebe dönemi ve ana ortaklık/konsolide ayrımı.
