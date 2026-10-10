@@ -988,8 +988,10 @@ def build_historical_analysis(
         # Prefer the provider's explicit "Serbest Nakit Akım" row. If missing,
         # reconstruct FCF as operating cash flow minus absolute capex.
         ttm_fcf = _ttm(fcf_d)
+        ttm_fcf_source = "EXPLICIT_CASHFLOW" if ttm_fcf is not None else "UNAVAILABLE"
         if ttm_fcf is None and ttm_ocf is not None and ttm_capex is not None:
             ttm_fcf = ttm_ocf - ttm_capex
+            ttm_fcf_source = "RECONSTRUCTED_CFO_MINUS_CAPEX"
 
         latest_periods = sorted(
             set(revenue.index) | set(net_income.index) | set(balance.get("total_assets", pd.Series(dtype=float)).index),
@@ -1106,6 +1108,7 @@ def build_historical_analysis(
             "ttm_operating_cash_flow": ttm_ocf,
             "ttm_capex": ttm_capex,
             "ttm_free_cash_flow": ttm_fcf,
+            "ttm_free_cash_flow_source": ttm_fcf_source,
             "cash_conversion": _safe_ratio(ttm_ocf, ttm_ni) if ttm_ni is not None and ttm_ni > 0 else None,
             "capex_to_ocf": _safe_ratio(ttm_capex, ttm_ocf) if ttm_ocf is not None and ttm_ocf > 0 else None,
             "fcf_margin": _safe_ratio(ttm_fcf, ttm_rev, 100.0),
@@ -1148,6 +1151,9 @@ def build_historical_analysis(
                     "net_income":net_income_d,
                     "total_net_income":total_net_income_d,
                     "revenue":revenue_d,
+                    "gross_profit":gross_profit_d,
+                    "operating_profit":operating_profit_d,
+                    "capex":capex_d,
                     "free_cash_flow":fcf_d,
                     "operating_cash_flow":ocf_d,
                 }.items()
