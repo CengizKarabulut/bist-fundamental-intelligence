@@ -9,6 +9,7 @@ on:
       - "history_engine.py"
       - "statement_reconciliation.py"
       - "statement_metrics.py"
+      - "statement_peers.py"
       - "audit_readiness.py"
       - "tests/**"
       - "special_profiles.py"
@@ -45,7 +46,7 @@ jobs:
       - name: Bağımlılıkları kur
         run: pip install -r requirements.txt
       - name: Sözdizimi kontrolü
-        run: python -m py_compile statement_metrics.py analyze.py history_engine.py special_profiles.py audit_all.py audit_merge.py
+        run: python -m py_compile statement_metrics.py statement_peers.py analyze.py history_engine.py special_profiles.py audit_all.py audit_merge.py
       - name: Muhasebe ve audit statü testleri
         run: python -m unittest discover -s tests -p "test_*.py" -v
       - name: Tüm BIST shard audit
@@ -64,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -79,11 +80,27 @@ jobs:
           path: audit_downloads
           merge-multiple: false
       - name: Audit hazırlık statüsü modülünü doğrula
-        run: python -m py_compile audit_readiness.py audit_merge.py
+        run: python -m py_compile audit_readiness.py audit_merge.py statement_peers.py
       - name: Sonuçları birleştir
         run: python audit_merge.py
       - name: Release quality gate
         run: python quality_gate.py --summary audit_summary/full_bist_audit_summary.json
+      - name: Bağımsız BIST sektör emsal önbelleğini yayımla
+        # Publish only after complete 8/8 shards and a passing release gate.
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data
+          cp audit_summary/statement_peer_snapshot.csv data/statement_peer_snapshot.csv
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/statement_peer_snapshot.csv
+          if git diff --cached --quiet; then
+            echo "Emsal verisinde değişiklik yok."
+          else
+            git commit -m "Refresh statement-based BIST peer medians [skip ci]"
+            git push origin HEAD:main
+          fi
       - name: Denetim sonucunu Actions özetinde göster
         if: always()
         shell: bash
