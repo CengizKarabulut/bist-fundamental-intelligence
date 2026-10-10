@@ -486,7 +486,7 @@ def enrich_target_from_history(t,history):
     return t
 
 
-def _apply_independent_statement_factors(a,p,g,statement_ratios):
+def _apply_independent_statement_factors(a,p,g,statement_ratios,history=None):
     """Use our statement arithmetic for the selected stock, not vendor ratios.
 
     Provider ratios remain separately retrievable via the source validation
@@ -521,6 +521,21 @@ def _apply_independent_statement_factors(a,p,g,statement_ratios):
                 x["groups"][gn]["pct"]=None
                 x["groups"][gn]["n"]=0
                 x["groups"][gn]["basis"]="STATEMENT_PEER_DATA_PENDING"
+    # A valid numeric return can still be economically UNSCOREABLE when
+    # the current consolidated equity is non-positive. Preserve numbers for
+    # disclosure, but never reward a negative capital base.
+    summary=(history or {}).get("summary") or {}
+    current_equity=fnum(summary.get("equity"))
+    parent_equity=fnum(summary.get("parent_equity"))
+    if p!="Banka" and (
+        (current_equity is not None and current_equity<=0)
+        or (parent_equity is not None and parent_equity<=0)
+    ):
+        for factor in ("roe","pb","de","eq_assets"):
+            if factor in a:
+                a[factor]["scoreable"]=False
+                a[factor]["abs"]=None
+                a[factor]["score_exclusion_reason"]="Nonpositive reported equity"
     return a
 
 
@@ -555,7 +570,7 @@ def apply_profile_primary_source(a,p,history,g,market_cap_try=None):
     """Apply profile-specific primary sources and accounting sanity guards."""
     if not history or history.get("error"):
         return _apply_independent_statement_factors(
-            a,p,g,derive_statement_ratios(history,market_cap_try,p)
+            a,p,g,derive_statement_ratios(history,market_cap_try,p),history
         )
 
     # GYO realised valuation: İş Yatırım company-card data takes priority.
@@ -621,7 +636,7 @@ def apply_profile_primary_source(a,p,history,g,market_cap_try=None):
                 a[k]["score_exclusion_reason"]="Negatif/sıfır özkaynak nedeniyle oran normal kalite puanına alınmadı."
 
     return _apply_independent_statement_factors(
-        a,p,g,derive_statement_ratios(history,market_cap_try,p)
+        a,p,g,derive_statement_ratios(history,market_cap_try,p),history
     )
 
 def _quality_weights(profile):
