@@ -39,23 +39,62 @@ formülleri tek hisse HTML/JSON raporu ve tüm BIST denetiminde kullanır.
 - İş Yatırım, TradingView ve EkoFin değerleri *doğruluk hakemi* değil,
   varsa ayrı karşılaştırma referanslarıdır. EkoFin canlı erişimi henüz
   bu repoda yoktur.
-- **Şu anki indirme hattı doğrudan KAP XBRL/API entegrasyonu değildir.**
-  Mali tablolar BorsaPy/İş Yatırım aracılığıyla temin edilir.
-  Girdi ve hesaplanan oranların denetim izi audit JSON artifact'ında
-  saklanır; ham bilanço belgelerinin Git deposuna her çalışmada commit
-  edilmesi uygulanmaz.
+- Varsayılan finansal indirme BorsaPy/İş Yatırım'dır.
+  `kap_financials.py` resmi KAP/MKK finansal tablo API ürünü için
+  **kimlik doğrulamalı ve varsayılan olarak pasif adaptör** ekler.
+  Doğrudan KAP API erişimi ancak resmi ürün sözleşmesi, onaylı API
+  anahtarı ve örnek cevap şeması edinildikten sonra açılabilir.
+  MKK'nın spesifik finansal tablo API ürününün URL/JSON şeması bu
+  repoda henüz canlı test edilmiş değildir. Girdiler audit JSON'unda
+  izlenebilir, kaynaklar birbiriyle otomatik karıştırılmaz.
 - Piyasa değeri hâlâ TradingView ekranındaki güncel fiyat girdisidir;
   bunun veri zamanı sağlanmadığında bilinmiyor olarak işaretlenir.
-- BIST sektör/endüstri medyanları halen sağlayıcı bazlı olduğundan,
-  kendi hesapladığımız 18 oran için bu medyan ve yüzdelik sıralama
-  şimdilik **N/A** bırakılır. Bir sonraki adım, tam denetimin ürettiği
-  `statement_*` sütunlarıyla kendi muhasebe-bazlı sektör medyanlarımızı
-  oluşturmaktır. Standart oranı farklı tanımdaki kaynak medyanıyla
-  karşılaştırıp gerçeğe aykırı sıralama üretilmez.
+- `statement_peers.py` başarılı 8-parçalı tüm BIST denetiminin
+  `statement_*` oranlarından bağımsız finansal tablo bazlı emsal
+  medyanları üretir. Endüstri, sektör, BIST100 ve tüm BIST içinde
+  şirketin kendisi çıkarılır, karşılaştırılabilir rapor dönemi
+  (en fazla iki çeyrek eski), eski snapshot (10 gün), geçersiz/negatif
+  değerler ve yetersiz örneklem filtrelenir. Her örnekte hangi veri
+  tablosu sürümünün kullanıldığı kaydedilir.
+- Full BIST Audit Quality Gate başarılı olduğunda dosya otomatik
+  `data/statement_peer_snapshot.csv` yoluna GitHub Actions ile
+  yayımlanır. İlk başarılı yayımdan önce emsal oranları **N/A**
+  kalır; hazır İş Yatırım/TradingView oranları yerine konmaz.
 
 **Aday sürüm sınırlaması:** İlk 621 şirketlik denetim ve 8 şirketlik
 regresyon tamamlanana kadar bu sürümün hesaplama kapsamı/kalitesi
 doğrulanmış sayılmaz. v1.1.0 kabul raporu v1.2'nin garantisi değildir.
+
+## Resmî KAP entegrasyonunu açmak için
+
+MKK'nın <https://apiportal.mkk.com.tr/> portalında hesap açılması,
+hesabın onaylanması, API anahtarı oluşturulması ve yetkili **finansal
+tablo veri ürününün** bulunup abonelik/erişim şartlarının kontrol
+edilmesi gerekir. API portalının genel kullanımının ücretsiz olduğu
+duyurulmuştur; özel veri servisinin fiyatı veya erişim hakkı bu
+bilgiden otomatik olarak çıkarılamaz.
+
+API ürünü gerçek finansal tabloları kapsıyorsa GitHub deposunda
+**Settings → Secrets and variables → Actions** üzerinden iki secret
+oluşturulur:
+
+- `KAP_API_KEY` — gizli API anahtarı. Sohbete veya repoya yazılmaz.
+- `KAP_API_FINANCIALS_URL_TEMPLATE` — portalın dökümante ettiği,
+  şirket ve finansal grup parametrelerini içeren resmî HTTPS endpoint;
+  örnek/adres **uydurulmamalıdır**.
+- Ürünün yetkilendirme başlığı `X-API-Key` değilse isteğe bağlı
+  `KAP_API_KEY_HEADER` Actions variable olarak eklenir.
+
+API yanıtı şu anda yalnız güvenli bir standart sözleşmeye dönüştürülmüş
+JSON için işlenir: hisse kodu, finansal grup, para birimi, tutar
+ölçeği ve her kalem için açık dönem + tutar gerektirir. MKK'nın yetkili
+ürününe ait **gerçek cevap şeması incelenmeden** bu dönüştürücü
+canlı ortamda çalışır kabul edilmez. Bilinmeyen veya eksik cevap
+geldiğinde yanlış oran üretmek yerine sistem hata bildirir.
+
+Bir kez yapılandırıldığında tek-hisse ve tam denetim Actions iş
+akışları ortam değişkenlerini otomatik aktaracak şekilde hazırdır.
+Bu aktivasyon ve canlı uçtan uca doğrulama **henüz yapılmadı**.
 
 ## v1.1.0 Stable — kapsam ve doğrulanmış sınırlar
 
